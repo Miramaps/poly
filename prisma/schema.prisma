@@ -1,0 +1,135 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model BotState {
+  id             Int      @id @default(1)
+  enabled        Boolean  @default(false)
+  mode           String   @default("auto") // auto | manual
+  tradingMode    String   @default("PAPER") @map("trading_mode") // PAPER | LIVE
+  selectedMarket String?  @map("selected_market")
+  config         Json     @default("{}")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("bot_state")
+}
+
+model Market {
+  id         String    @id @default(cuid())
+  slug       String    @unique
+  question   String?
+  startTime  DateTime? @map("start_time")
+  endTime    DateTime? @map("end_time")
+  tokenUp    String?   @map("token_up")
+  tokenDown  String?   @map("token_down")
+  conditionId String?  @map("condition_id")
+  metadata   Json      @default("{}")
+  status     String    @default("upcoming") // upcoming | live | ended | resolved
+  resolution String?   // UP | DOWN | null
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  trades Trade[]
+  cycles Cycle[]
+
+  @@map("markets")
+}
+
+model Trade {
+  id          String   @id @default(cuid())
+  timestamp   DateTime @default(now()) @map("ts")
+  marketSlug  String   @map("market_slug")
+  leg         Int      // 1 or 2
+  side        String   // UP or DOWN
+  tokenId     String   @map("token_id")
+  shares      Float
+  price       Float
+  cost        Float
+  fee         Float    @default(0)
+  cashAfter   Float    @map("cash_after")
+  cycleId     String?  @map("cycle_id")
+
+  market Market  @relation(fields: [marketSlug], references: [slug])
+  cycle  Cycle?  @relation(fields: [cycleId], references: [id])
+
+  @@index([marketSlug])
+  @@index([cycleId])
+  @@map("trades")
+}
+
+model Cycle {
+  id               String    @id @default(cuid())
+  marketSlug       String    @map("market_slug")
+  startedAt        DateTime  @default(now()) @map("started_at")
+  endedAt          DateTime? @map("ended_at")
+  leg1Side         String?   @map("leg1_side")
+  leg1Price        Float?    @map("leg1_price")
+  leg1Time         DateTime? @map("leg1_time")
+  leg1Shares       Float?    @map("leg1_shares")
+  leg2Side         String?   @map("leg2_side")
+  leg2Price        Float?    @map("leg2_price")
+  leg2Time         DateTime? @map("leg2_time")
+  leg2Shares       Float?    @map("leg2_shares")
+  totalCost        Float?    @map("total_cost")
+  lockedInProfit   Float?    @map("locked_in_profit")
+  lockedInPct      Float?    @map("locked_in_pct")
+  status           String    @default("pending") // pending | leg1_done | complete | incomplete | settled
+
+  market Market  @relation(fields: [marketSlug], references: [slug])
+  trades Trade[]
+
+  @@index([marketSlug])
+  @@index([status])
+  @@map("cycles")
+}
+
+model EquitySnapshot {
+  id         String   @id @default(cuid())
+  timestamp  DateTime @default(now()) @map("ts")
+  cash       Float
+  equity     Float
+  unrealized Float    @default(0)
+  realized   Float    @default(0)
+
+  @@index([timestamp])
+  @@map("equity_snapshots")
+}
+
+model LogEntry {
+  id        String   @id @default(cuid())
+  timestamp DateTime @default(now()) @map("ts")
+  level     String   // info | warn | error | debug
+  message   String
+  meta      Json?
+
+  @@index([timestamp])
+  @@map("log_entries")
+}
+
+model Config {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("configs")
+}
+
+model Wallet {
+  id                   String   @id @default(cuid())
+  address              String   @unique
+  encryptedPrivateKey  String   @map("encrypted_private_key")
+  iv                   String
+  isActive             Boolean  @default(true) @map("is_active")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@index([isActive])
+  @@map("wallets")
+}
+

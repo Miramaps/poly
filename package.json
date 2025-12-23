@@ -1,0 +1,37 @@
+{
+  "name": "poly-trader",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:bot": "npm run dev -w apps/bot",
+    "dev:dashboard": "npm run dev -w apps/dashboard",
+    "build:bot": "npm run build -w apps/bot",
+    "build:dashboard": "npm run build -w apps/dashboard",
+    "build": "npm run build -w packages/shared && npm run build:bot && npm run build:dashboard",
+    "start:bot": "npm run start -w apps/bot",
+    "start:dashboard": "npm run start -w apps/dashboard",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "test": "npm run test -w packages/shared && npm run test -w apps/bot",
+    "lint": "eslint . --ext .ts,.tsx"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "eslint": "^8.55.0",
+    "prettier": "^3.1.0",
+    "prisma": "^5.7.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
+
