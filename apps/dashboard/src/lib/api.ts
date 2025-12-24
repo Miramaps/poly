@@ -8,7 +8,7 @@ function getAuthHeader(): string {
     if (stored) return stored;
   }
   // Default credentials - must match DASH_USER/DASH_PASS in .env
-  return `Basic ${Buffer.from('admin:aleona7535').toString('base64')}`;
+  return `Basic ${Buffer.from('admin:sexmachine666').toString('base64')}`;
 }
 
 export function setAuth(username: string, password: string) {
