@@ -1,11 +1,26 @@
 // Bot configuration
 export interface BotConfig {
-  shares: number;
-  sumTarget: number;
-  move: number;
-  windowMin: number;
-  dumpWindowSec: number;
-  feeBps: number;
+  // Entry settings
+  entryThreshold: number;      // Buy when price drops below this (default: 0.35)
+  shares: number;              // Base shares per buy
+  
+  // DCA settings
+  dcaEnabled: boolean;         // Enable dollar-cost averaging
+  dcaLevels: number[];         // Price levels to buy more (e.g., [0.30, 0.25, 0.20])
+  dcaMultiplier: number;       // Multiply shares at each DCA level (e.g., 1.5x)
+  
+  // Hedge settings
+  sumTarget: number;           // Hedge when avgCost + oppositeAsk <= this (default: 0.99)
+  
+  // Exit settings
+  breakevenEnabled: boolean;   // Wait for breakeven before exiting (no losses)
+  maxHoldMinutes: number;      // Max time to hold waiting for breakeven (0 = forever)
+  
+  // Legacy (kept for compatibility)
+  move: number;                // Dump detection threshold (deprecated)
+  windowMin: number;           // Watch window in minutes
+  dumpWindowSec: number;       // Dump detection window (deprecated)
+  feeBps: number;              // Fee basis points
 }
 
 // Bot state
@@ -84,18 +99,31 @@ export interface Cycle {
   marketSlug: string;
   startedAt: Date;
   endedAt?: Date;
+  
+  // Leg 1 (entry side)
   leg1Side?: 'UP' | 'DOWN';
-  leg1Price?: number;
-  leg1Time?: Date;
-  leg1Shares?: number;
+  leg1Price?: number;           // Average price (for DCA)
+  leg1Time?: Date;              // First buy time
+  leg1Shares?: number;          // Total shares
+  leg1Buys?: number;            // Number of DCA buys
+  leg1TotalCost?: number;       // Total cost for leg 1
+  
+  // Leg 2 (hedge side)
   leg2Side?: 'UP' | 'DOWN';
   leg2Price?: number;
   leg2Time?: Date;
   leg2Shares?: number;
+  
+  // Totals
   totalCost?: number;
   lockedInProfit?: number;
   lockedInPct?: number;
-  status: 'pending' | 'leg1_done' | 'complete' | 'incomplete' | 'settled';
+  
+  // Exit tracking
+  exitPrice?: number;           // Price at exit (if not hedged)
+  exitPnL?: number;             // P&L at exit
+  
+  status: 'pending' | 'buying' | 'leg1_done' | 'complete' | 'incomplete' | 'settled';
 }
 
 // Positions
@@ -197,10 +225,11 @@ export interface DumpDetection {
 // Hedge condition result
 export interface HedgeCondition {
   met: boolean;
-  leg1Price: number;
-  oppositeAsk: number;
-  sum: number;
-  target: number;
+  avgCost: number;            // Average cost per share (leg1)
+  oppositeAsk: number;        // Current ask on opposite side
+  sum: number;                // avgCost + oppositeAsk
+  target: number;             // sumTarget threshold
+  potentialProfit: number;    // Profit if hedged now
 }
 
 // Wallet types

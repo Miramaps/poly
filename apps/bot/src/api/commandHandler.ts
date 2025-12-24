@@ -82,33 +82,37 @@ export class CommandHandler {
   }
 
   private async handleAutoOn(params: Record<string, unknown>): Promise<CommandResponse> {
-    const validation = validateAutoOnParams(params);
-
-    if (!validation.valid) {
-      return {
-        success: false,
-        message: `Invalid parameters:\n${validation.errors.join('\n')}`,
-      };
-    }
+    // New bulletproof strategy params: shares, sumTarget, entryThreshold
+    // Example: auto on 10 0.99 0.35
+    const shares = params.shares as number || 10;
+    const sumTarget = params.sumTarget as number || 0.99;
+    const entryThreshold = params.move as number || 0.35; // Reuse 'move' param for entry threshold
 
     const config: Partial<BotConfig> = {
-      shares: validation.data!.shares,
-      sumTarget: validation.data!.sumTarget,
-      move: validation.data!.move,
-      windowMin: validation.data!.windowMin,
-      dumpWindowSec: validation.data!.dumpWindowSec,
+      shares,
+      sumTarget,
+      entryThreshold,
+      dcaEnabled: true,
+      dcaLevels: [0.30, 0.25, 0.20, 0.15],
+      dcaMultiplier: 1.5,
+      breakevenEnabled: true,
+      windowMin: 15,
     };
 
     await this.engine.enable(config);
 
     return {
       success: true,
-      message: `Bot enabled with config:
-  Shares: ${config.shares}
-  Sum Target: ${config.sumTarget}
-  Move Threshold: ${(config.move! * 100).toFixed(1)}%
-  Watch Window: ${config.windowMin} min
-  Dump Window: ${config.dumpWindowSec} sec`,
+      message: `🛡️ BULLETPROOF BOT ENABLED:
+  ────────────────────────────────────
+  Entry Threshold: $${entryThreshold.toFixed(2)} (buy when price drops below)
+  Base Shares: ${shares}
+  DCA Levels: ${config.dcaLevels?.join(', ')}
+  DCA Multiplier: ${config.dcaMultiplier}x
+  Sum Target: ${sumTarget} (hedge when avg + opposite ≤ this)
+  Breakeven Exit: ${config.breakevenEnabled ? 'ON' : 'OFF'}
+  ────────────────────────────────────
+  Strategy: Buy low, DCA lower, hedge or exit at breakeven`,
       data: config,
     };
   }
@@ -211,36 +215,49 @@ Equity:      $${portfolio.equity.toFixed(2)}
     return {
       success: true,
       message: `
-─── CURRENT CONFIG ─────────────────────────────────────────────────
-Shares:         ${config.shares}
-Sum Target:     ${config.sumTarget} (${((1 - config.sumTarget) * 100).toFixed(1)}% min profit)
-Move Threshold: ${(config.move * 100).toFixed(1)}%
-Watch Window:   ${config.windowMin} min
-Dump Window:    ${config.dumpWindowSec} sec
-Fee (bps):      ${config.feeBps}
+─── BULLETPROOF CONFIG ─────────────────────────────────────────────
+Entry Threshold: $${config.entryThreshold} (buy when price < this)
+Base Shares:     ${config.shares}
+DCA Enabled:     ${config.dcaEnabled ? 'YES' : 'NO'}
+DCA Levels:      ${config.dcaLevels?.join(', ') || 'none'}
+DCA Multiplier:  ${config.dcaMultiplier}x
+Sum Target:      ${config.sumTarget} (${((1 - config.sumTarget) * 100).toFixed(1)}% min profit)
+Breakeven Exit:  ${config.breakevenEnabled ? 'ON (no losses)' : 'OFF'}
+Max Hold:        ${config.maxHoldMinutes === 0 ? 'Forever' : `${config.maxHoldMinutes} min`}
 ───────────────────────────────────────────────────────────────────`.trim(),
       data: config,
     };
   }
 
   private async handleConfigSet(params: Record<string, unknown>): Promise<CommandResponse> {
-    const updates = params.updates as Record<string, string | number>;
+    const updates = params.updates as Record<string, string | number | boolean>;
 
     if (!updates || Object.keys(updates).length === 0) {
       return {
         success: false,
-        message: 'No updates provided. Usage: config set key=value ...',
+        message: `No updates provided. Usage: set key value
+        
+Available keys:
+  entryThreshold  - Buy when price < this (e.g., 0.35)
+  shares          - Base shares per buy (e.g., 10)
+  sumTarget       - Hedge threshold (e.g., 0.99)
+  dcaEnabled      - Enable DCA (true/false)
+  dcaMultiplier   - Multiply shares each DCA level (e.g., 1.5)
+  breakevenEnabled - Wait for breakeven exit (true/false)
+
+Example: set entryThreshold 0.30`,
       };
     }
 
-    // Convert string values to appropriate types
     const typedUpdates: Partial<BotConfig> = {};
+    const validNumericKeys = ['shares', 'sumTarget', 'entryThreshold', 'dcaMultiplier', 'windowMin', 'feeBps', 'maxHoldMinutes'];
+    const validBooleanKeys = ['dcaEnabled', 'breakevenEnabled'];
     
     for (const [key, value] of Object.entries(updates)) {
-      const numValue = typeof value === 'number' ? value : parseFloat(value);
-      
-      if (key in { shares: 1, sumTarget: 1, move: 1, windowMin: 1, dumpWindowSec: 1, feeBps: 1 }) {
-        (typedUpdates as any)[key] = numValue;
+      if (validNumericKeys.includes(key)) {
+        (typedUpdates as any)[key] = typeof value === 'number' ? value : parseFloat(value as string);
+      } else if (validBooleanKeys.includes(key)) {
+        (typedUpdates as any)[key] = value === 'true' || value === true;
       }
     }
 

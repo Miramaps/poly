@@ -8,7 +8,6 @@ import type {
   Portfolio,
   LiveStatus,
   TokenOrderbooks,
-  DumpDetection,
   HedgeCondition,
 } from '@poly-trader/shared';
 import { DEFAULT_CONFIG, CYCLE_STATUS, SIDE } from '@poly-trader/shared';
@@ -16,24 +15,30 @@ import { Database } from '../services/database.js';
 import { WebSocketManager } from '../services/websocket.js';
 import { MarketDiscovery } from '../services/marketDiscovery.js';
 import { PaperExecution } from './paperExecution.js';
-import { DumpDetector } from './dumpDetector.js';
 import { createBufferedLogger } from '../utils/logger.js';
 
 const logger = createBufferedLogger('engine');
 
+/**
+ * BULLETPROOF TRADING STRATEGY
+ * 
+ * 1. ENTRY: Wait until one side drops below entryThreshold (default 0.35)
+ * 2. DCA: Buy more at each dcaLevel (0.30, 0.25, 0.20, etc.)
+ * 3. HEDGE: When avgCost + oppositeAsk <= sumTarget (0.99), buy opposite
+ * 4. EXIT: If no hedge, wait until price >= avgCost (breakeven) before selling
+ */
 export class TradingEngine extends EventEmitter {
   private db: Database;
   private wsManager: WebSocketManager;
   private marketDiscovery: MarketDiscovery;
   private execution: PaperExecution;
-  private dumpDetector: DumpDetector;
 
   private state: BotState = {
     enabled: false,
     mode: 'auto',
     tradingMode: 'PAPER',
     selectedMarket: null,
-    config: { ...DEFAULT_CONFIG },
+    config: { ...DEFAULT_CONFIG } as BotConfig,
   };
 
   private portfolio: Portfolio = {
@@ -47,10 +52,13 @@ export class TradingEngine extends EventEmitter {
   private currentMarket: Market | null = null;
   private currentCycle: Cycle | null = null;
   private orderbooks: TokenOrderbooks = { UP: null, DOWN: null };
-  private watcherActive = false;
-  private watcherStartTime: number | null = null;
   private mainLoopInterval: NodeJS.Timeout | null = null;
   private startTime: number = Date.now();
+
+  // DCA tracking
+  private dcaLevelsBought: Set<number> = new Set();
+  private leg1TotalCost: number = 0;
+  private leg1TotalShares: number = 0;
 
   constructor(db: Database, wsManager: WebSocketManager, marketDiscovery: MarketDiscovery) {
     super();
@@ -58,7 +66,6 @@ export class TradingEngine extends EventEmitter {
     this.wsManager = wsManager;
     this.marketDiscovery = marketDiscovery;
     this.execution = new PaperExecution(db);
-    this.dumpDetector = new DumpDetector();
   }
 
   async initialize() {
@@ -70,7 +77,7 @@ export class TradingEngine extends EventEmitter {
         mode: savedState.mode as 'auto' | 'manual',
         tradingMode: (savedState as any).tradingMode || 'PAPER',
         selectedMarket: savedState.selectedMarket,
-        config: { ...DEFAULT_CONFIG, ...(savedState.config as Partial<BotConfig>) },
+        config: { ...DEFAULT_CONFIG, ...(savedState.config as Partial<BotConfig>) } as BotConfig,
       };
     }
 
@@ -85,10 +92,12 @@ export class TradingEngine extends EventEmitter {
     const positions = await this.db.getOpenPositions();
     this.portfolio.positions = positions;
 
-    logger.info('Engine initialized', {
+    logger.info('Engine initialized with BULLETPROOF strategy', {
       enabled: this.state.enabled,
       cash: this.portfolio.cash,
-      positions: this.portfolio.positions,
+      entryThreshold: this.state.config.entryThreshold,
+      dcaLevels: this.state.config.dcaLevels,
+      sumTarget: this.state.config.sumTarget,
     });
   }
 
@@ -113,12 +122,10 @@ export class TradingEngine extends EventEmitter {
     if (!this.state.enabled) return;
 
     try {
-      // Check for market updates
       await this.checkMarket();
 
-      // If we have an active market, check for trade signals
       if (this.currentMarket && this.currentMarket.status === 'live') {
-        await this.processSignals();
+        await this.processStrategy();
       }
     } catch (err) {
       logger.error('Main loop error', { error: (err as Error).message });
@@ -127,7 +134,6 @@ export class TradingEngine extends EventEmitter {
 
   private async checkMarket() {
     if (!this.currentMarket) {
-      // Find next market
       if (this.state.mode === 'auto') {
         const market = await this.marketDiscovery.findNextBTCUpDownMarket();
         if (market) {
@@ -154,79 +160,41 @@ export class TradingEngine extends EventEmitter {
         await this.onMarketEnd();
       }
     }
-
-    // Check watcher window
-    if (this.watcherActive && this.watcherStartTime) {
-      const elapsed = (now - this.watcherStartTime) / 1000 / 60;
-      if (elapsed >= this.state.config.windowMin) {
-        this.watcherActive = false;
-        logger.info('Watcher window expired, no dump detected');
-      }
-    }
   }
 
   private async setCurrentMarket(market: Market) {
     this.currentMarket = market;
     this.currentCycle = null;
-    this.watcherActive = false;
-    this.watcherStartTime = null;
-    this.dumpDetector.reset();
+    this.resetDCATracking();
 
-    // Log detailed market info with link
     const marketLink = `https://polymarket.com/event/${market.slug}`;
     logger.info('═══════════════════════════════════════════════════════════════');
-    logger.info('🎯 NEW MARKET SELECTED');
+    logger.info('🎯 NEW MARKET - BULLETPROOF STRATEGY');
     logger.info(`   📊 ${market.question || market.slug}`);
     logger.info(`   🔗 ${marketLink}`);
-    logger.info(`   ⏰ Status: ${market.status?.toUpperCase()}`);
-    if (market.startTime) {
-      logger.info(`   🕐 Start: ${market.startTime.toLocaleTimeString()}`);
-    }
-    if (market.endTime) {
-      logger.info(`   🕐 End: ${market.endTime.toLocaleTimeString()}`);
-    }
-    logger.info(`   🪙 Token UP: ${market.tokenUp?.slice(0, 20)}...`);
-    logger.info(`   🪙 Token DOWN: ${market.tokenDown?.slice(0, 20)}...`);
+    logger.info(`   💰 Entry: Buy when price < $${this.state.config.entryThreshold}`);
+    logger.info(`   📈 DCA: ${this.state.config.dcaLevels?.join(', ') || 'disabled'}`);
+    logger.info(`   🎯 Hedge: When sum ≤ ${this.state.config.sumTarget}`);
+    logger.info(`   🛡️ Breakeven: ${this.state.config.breakevenEnabled ? 'ON' : 'OFF'}`);
     logger.info('═══════════════════════════════════════════════════════════════');
 
-    // Save market to database first (required for foreign key)
     await this.db.upsertMarket(market);
 
-    // If market is already live and within watcher window, activate watcher immediately
-    if (market.status === 'live' && market.startTime) {
-      const elapsedMin = (Date.now() - market.startTime.getTime()) / 1000 / 60;
-      if (elapsedMin < this.state.config.windowMin) {
-        logger.info(`🔔 Market already LIVE - activating watcher (${elapsedMin.toFixed(1)} min elapsed)`);
-        this.watcherActive = true;
-        this.watcherStartTime = market.startTime.getTime();
-        
-        // Create pending cycle
-        this.currentCycle = {
-          id: nanoid(),
-          marketSlug: market.slug,
-          startedAt: new Date(),
-          status: 'pending',
-        };
-        await this.db.createCycle(this.currentCycle);
-      } else {
-        logger.warn(`⏰ Market LIVE but watcher window expired (${elapsedMin.toFixed(1)} min > ${this.state.config.windowMin} min)`);
-      }
+    // If market is already live, start immediately
+    if (market.status === 'live') {
+      await this.onMarketStart();
     }
 
-    // Unsubscribe from ALL old tokens before subscribing to new ones
+    // Unsubscribe from old tokens and subscribe to new ones
     this.wsManager.disconnect();
 
-    // Subscribe to orderbook updates
     if (market.tokenUp && market.tokenDown) {
       let lastLogTime = 0;
       
       this.wsManager.subscribeToOrderbook(market.tokenUp, (ob) => {
         this.orderbooks.UP = ob;
-        const price = ob.asks[0]?.price || 0;
-        this.dumpDetector.addPriceSnapshot('UP', price);
         this.emit('orderbook', { side: 'UP', orderbook: ob });
         
-        // Log price updates every 5 seconds
         const now = Date.now();
         if (now - lastLogTime > 5000) {
           this.logPriceUpdate();
@@ -236,13 +204,20 @@ export class TradingEngine extends EventEmitter {
 
       this.wsManager.subscribeToOrderbook(market.tokenDown, (ob) => {
         this.orderbooks.DOWN = ob;
-        const price = ob.asks[0]?.price || 0;
-        this.dumpDetector.addPriceSnapshot('DOWN', price);
         this.emit('orderbook', { side: 'DOWN', orderbook: ob });
       });
     }
+  }
 
-    await this.db.upsertMarket(market);
+  private resetDCATracking() {
+    this.dcaLevelsBought.clear();
+    this.leg1TotalCost = 0;
+    this.leg1TotalShares = 0;
+  }
+
+  private getAverageCost(): number {
+    if (this.leg1TotalShares === 0) return 0;
+    return this.leg1TotalCost / this.leg1TotalShares;
   }
 
   private logPriceUpdate() {
@@ -251,36 +226,35 @@ export class TradingEngine extends EventEmitter {
     const downAsk = this.orderbooks.DOWN?.asks[0]?.price;
     const downBid = this.orderbooks.DOWN?.bids[0]?.price;
     
-    const sum = (upAsk || 0) + (downAsk || 0);
-    const dumpStatus = this.dumpDetector.getStatus();
+    const avgCost = this.getAverageCost();
+    const status = this.currentCycle?.status || 'pending';
     
     let statusIcon = '👁️';
-    if (this.currentCycle?.status === 'leg1_done') {
+    let hedgeInfo = '';
+    
+    if (status === 'leg1_done' || status === 'buying') {
       statusIcon = '⏳';
-    } else if (dumpStatus.dropPct > 0.05) {
-      statusIcon = '📉';
+      const oppAsk = this.currentCycle?.leg1Side === 'UP' ? downAsk : upAsk;
+      if (avgCost && oppAsk) {
+        const sum = avgCost + oppAsk;
+        hedgeInfo = ` | Sum: ${sum.toFixed(3)} (need ≤${this.state.config.sumTarget})`;
+      }
     }
     
-    logger.info(`${statusIcon} LIVE | UP: ${upBid?.toFixed(2) || '—'}/${upAsk?.toFixed(2) || '—'} | DOWN: ${downBid?.toFixed(2) || '—'}/${downAsk?.toFixed(2) || '—'} | Sum: ${sum.toFixed(3)} | Drop: ${(dumpStatus.dropPct * 100).toFixed(1)}%`);
+    const posInfo = this.leg1TotalShares > 0 
+      ? ` | Pos: ${this.leg1TotalShares} @ avg $${avgCost.toFixed(3)}`
+      : '';
+    
+    logger.info(`${statusIcon} LIVE | UP: ${upBid?.toFixed(2) || '—'}/${upAsk?.toFixed(2) || '—'} | DOWN: ${downBid?.toFixed(2) || '—'}/${downAsk?.toFixed(2) || '—'}${posInfo}${hedgeInfo}`);
   }
 
   private async onMarketStart() {
-    const link = `https://polymarket.com/event/${this.currentMarket?.slug}`;
-    
     logger.info('');
     logger.info('🚀 ═══════════════════════════════════════════════════════════');
-    logger.info('🚀 MARKET STARTED - WATCHER ACTIVE');
-    logger.info(`🚀 ${this.currentMarket?.question || this.currentMarket?.slug}`);
-    logger.info(`🚀 Link: ${link}`);
-    logger.info(`🚀 Watching for ${this.state.config.windowMin} min window`);
-    logger.info(`🚀 Dump threshold: ${(this.state.config.move * 100).toFixed(0)}% drop in ${this.state.config.dumpWindowSec}s`);
-    logger.info(`🚀 Shares per trade: ${this.state.config.shares}`);
+    logger.info('🚀 MARKET STARTED - WATCHING FOR ENTRY');
+    logger.info(`🚀 Will buy when any side drops below $${this.state.config.entryThreshold}`);
     logger.info('🚀 ═══════════════════════════════════════════════════════════');
     logger.info('');
-
-    this.watcherActive = true;
-    this.watcherStartTime = Date.now();
-    this.dumpDetector.reset();
 
     // Create new pending cycle
     this.currentCycle = {
@@ -296,104 +270,155 @@ export class TradingEngine extends EventEmitter {
   private async onMarketEnd() {
     logger.info('Market ended', { market: this.currentMarket?.slug });
 
-    // Handle incomplete cycle
     if (this.currentCycle && this.currentCycle.status !== 'complete') {
-      await this.handleIncompleteCycle();
+      await this.handleMarketEndExit();
     }
 
-    // Reset for next market
     this.currentMarket = null;
     this.currentCycle = null;
-    this.watcherActive = false;
     this.orderbooks = { UP: null, DOWN: null };
+    this.resetDCATracking();
   }
 
-  private async handleIncompleteCycle() {
+  private async handleMarketEndExit() {
     if (!this.currentCycle) return;
 
-    logger.warn('Handling incomplete cycle', { cycleId: this.currentCycle.id });
+    const avgCost = this.getAverageCost();
+    const side = this.currentCycle.leg1Side;
+    
+    if (!side || this.leg1TotalShares === 0) {
+      // No position, just mark as incomplete
+      this.currentCycle.status = 'incomplete';
+      this.currentCycle.endedAt = new Date();
+      await this.db.updateCycle(this.currentCycle);
+      return;
+    }
 
-    // Mark as incomplete
+    const currentBid = this.orderbooks[side]?.bids[0]?.price || 0;
+    const exitValue = this.leg1TotalShares * currentBid;
+    const pnl = exitValue - this.leg1TotalCost;
+
+    logger.warn('');
+    logger.warn('⚠️ ═══════════════════════════════════════════════════════════');
+    logger.warn('⚠️ MARKET ENDED - FORCED EXIT');
+    logger.warn(`⚠️ Position: ${this.leg1TotalShares} ${side} @ avg $${avgCost.toFixed(4)}`);
+    logger.warn(`⚠️ Exit price: $${currentBid.toFixed(4)}`);
+    logger.warn(`⚠️ P&L: $${pnl.toFixed(2)} (${((pnl / this.leg1TotalCost) * 100).toFixed(1)}%)`);
+    logger.warn('⚠️ ═══════════════════════════════════════════════════════════');
+    logger.warn('');
+
+    // Update portfolio
+    this.portfolio.cash += exitValue;
+    this.portfolio.realizedPnL += pnl;
+    this.portfolio.positions[side] = 0;
+
+    // Update cycle
     this.currentCycle.status = 'incomplete';
     this.currentCycle.endedAt = new Date();
-
-    // Flatten positions at best bid (paper)
-    const upBid = this.orderbooks.UP?.bids[0]?.price || 0;
-    const downBid = this.orderbooks.DOWN?.bids[0]?.price || 0;
-
-    const flattenValue =
-      this.portfolio.positions.UP * upBid +
-      this.portfolio.positions.DOWN * downBid;
-
-    this.portfolio.cash += flattenValue;
-    this.portfolio.realizedPnL += flattenValue - (this.currentCycle.totalCost || 0);
-    this.portfolio.positions = { UP: 0, DOWN: 0 };
+    this.currentCycle.exitPrice = currentBid;
+    this.currentCycle.exitPnL = pnl;
 
     await this.db.updateCycle(this.currentCycle);
     await this.saveEquitySnapshot();
   }
 
-  private async processSignals() {
-    if (!this.currentCycle || !this.watcherActive) return;
+  /**
+   * MAIN STRATEGY LOGIC
+   */
+  private async processStrategy() {
+    if (!this.currentCycle) return;
 
     const { config } = this.state;
 
-    // Leg 1: Check for dump
-    if (this.currentCycle.status === 'pending') {
-      const dump = this.dumpDetector.detectDump(
-        config.move,
-        config.dumpWindowSec
-      );
+    // Get current prices
+    const upAsk = this.orderbooks.UP?.asks[0]?.price || 1;
+    const downAsk = this.orderbooks.DOWN?.asks[0]?.price || 1;
 
-      if (dump.detected && dump.side) {
-        await this.executeLeg1(dump);
+    // PHASE 1: ENTRY - Check if either side is below entry threshold
+    if (this.currentCycle.status === 'pending') {
+      if (upAsk < config.entryThreshold) {
+        await this.executeBuy('UP', upAsk, 'ENTRY');
+      } else if (downAsk < config.entryThreshold) {
+        await this.executeBuy('DOWN', downAsk, 'ENTRY');
       }
+      return;
     }
 
-    // Leg 2: Check for hedge
-    if (this.currentCycle.status === 'leg1_done') {
-      const hedge = this.checkHedgeCondition();
+    // PHASE 2: DCA - Check if we should buy more
+    if (this.currentCycle.status === 'buying' || this.currentCycle.status === 'leg1_done') {
+      const side = this.currentCycle.leg1Side!;
+      const currentAsk = this.orderbooks[side]?.asks[0]?.price || 1;
 
+      // Check DCA levels
+      if (config.dcaEnabled && config.dcaLevels) {
+        for (const level of config.dcaLevels) {
+          if (currentAsk <= level && !this.dcaLevelsBought.has(level)) {
+            await this.executeBuy(side, currentAsk, `DCA@${level}`);
+            this.dcaLevelsBought.add(level);
+            break; // Only one DCA buy per loop
+          }
+        }
+      }
+
+      // PHASE 3: CHECK HEDGE CONDITION
+      const hedge = this.checkHedgeCondition();
       if (hedge.met) {
-        await this.executeLeg2(hedge);
+        await this.executeHedge(hedge);
+        return;
+      }
+
+      // PHASE 4: CHECK BREAKEVEN EXIT (if enabled and price recovered)
+      if (config.breakevenEnabled && this.currentCycle.status === 'leg1_done') {
+        const avgCost = this.getAverageCost();
+        const currentBid = this.orderbooks[side]?.bids[0]?.price || 0;
+        
+        // If we can exit at breakeven or profit, do it
+        if (currentBid >= avgCost) {
+          await this.executeBreakevenExit(side, currentBid, avgCost);
+        }
       }
     }
   }
 
-  private async executeLeg1(dump: DumpDetection) {
-    if (!this.currentCycle || !dump.side) return;
+  private async executeBuy(side: 'UP' | 'DOWN', price: number, reason: string) {
+    if (!this.currentCycle) return;
 
     const { config } = this.state;
-    const side = dump.side;
-    const orderbook = this.orderbooks[side];
-    if (!orderbook || !orderbook.asks[0]) return;
+    
+    // Calculate shares (with DCA multiplier if applicable)
+    let shares = config.shares;
+    if (reason.startsWith('DCA') && config.dcaMultiplier) {
+      const dcaBuyCount = this.dcaLevelsBought.size;
+      shares = Math.round(config.shares * Math.pow(config.dcaMultiplier, dcaBuyCount));
+    }
 
-    const price = orderbook.asks[0].price;
-    const cost = config.shares * price;
+    const cost = shares * price;
 
     // Check if we have enough cash
     if (cost > this.portfolio.cash) {
-      logger.warn('Insufficient cash for Leg 1', { cost, cash: this.portfolio.cash });
+      logger.warn(`Insufficient cash for ${reason}`, { cost, cash: this.portfolio.cash });
       return;
     }
 
     logger.info('');
-    logger.info('💥 ═══════════════════════════════════════════════════════════');
-    logger.info('💥 DUMP DETECTED! EXECUTING LEG 1');
-    logger.info(`💥 Side: ${side} dropped ${(dump.dropPct * 100).toFixed(1)}%`);
-    logger.info(`💥 Buying ${config.shares} shares @ $${price.toFixed(4)}`);
-    logger.info(`💥 Cost: $${cost.toFixed(2)}`);
-    logger.info(`💥 Market: https://polymarket.com/event/${this.currentMarket?.slug}`);
-    logger.info('💥 ═══════════════════════════════════════════════════════════');
+    logger.info('💰 ═══════════════════════════════════════════════════════════');
+    logger.info(`💰 ${reason}: BUYING ${side}`);
+    logger.info(`💰 Price: $${price.toFixed(4)} (threshold: $${config.entryThreshold})`);
+    logger.info(`💰 Shares: ${shares} @ $${price.toFixed(4)} = $${cost.toFixed(2)}`);
+    if (this.leg1TotalShares > 0) {
+      const newAvg = (this.leg1TotalCost + cost) / (this.leg1TotalShares + shares);
+      logger.info(`💰 New avg cost: $${newAvg.toFixed(4)}`);
+    }
+    logger.info('💰 ═══════════════════════════════════════════════════════════');
     logger.info('');
 
-    // Execute paper trade
+    // Execute trade
     const trade = await this.execution.buy({
       marketSlug: this.currentMarket!.slug,
       leg: 1,
       side,
       tokenId: side === 'UP' ? this.currentMarket!.tokenUp! : this.currentMarket!.tokenDown!,
-      shares: config.shares,
+      shares,
       price,
       cycleId: this.currentCycle.id,
       currentCash: this.portfolio.cash,
@@ -402,18 +427,23 @@ export class TradingEngine extends EventEmitter {
 
     // Update portfolio
     this.portfolio.cash = trade.cashAfter;
-    this.portfolio.positions[side] += config.shares;
+    this.portfolio.positions[side] += shares;
+
+    // Update DCA tracking
+    this.leg1TotalCost += cost;
+    this.leg1TotalShares += shares;
 
     // Update cycle
-    this.currentCycle.leg1Side = side;
-    this.currentCycle.leg1Price = price;
-    this.currentCycle.leg1Time = new Date();
-    this.currentCycle.leg1Shares = config.shares;
-    this.currentCycle.totalCost = cost;
+    if (!this.currentCycle.leg1Side) {
+      this.currentCycle.leg1Side = side;
+      this.currentCycle.leg1Time = new Date();
+    }
+    this.currentCycle.leg1Price = this.getAverageCost();
+    this.currentCycle.leg1Shares = this.leg1TotalShares;
+    this.currentCycle.leg1TotalCost = this.leg1TotalCost;
+    this.currentCycle.leg1Buys = (this.currentCycle.leg1Buys || 0) + 1;
+    this.currentCycle.totalCost = this.leg1TotalCost;
     this.currentCycle.status = 'leg1_done';
-
-    // Stop watching for dumps on this side
-    this.watcherActive = false;
 
     await this.db.updateCycle(this.currentCycle);
     await this.saveEquitySnapshot();
@@ -423,65 +453,70 @@ export class TradingEngine extends EventEmitter {
   }
 
   private checkHedgeCondition(): HedgeCondition {
-    if (!this.currentCycle || !this.currentCycle.leg1Price || !this.currentCycle.leg1Side) {
-      return { met: false, leg1Price: 0, oppositeAsk: 0, sum: 0, target: this.state.config.sumTarget };
+    if (!this.currentCycle || !this.currentCycle.leg1Side || this.leg1TotalShares === 0) {
+      return { met: false, avgCost: 0, oppositeAsk: 0, sum: 0, target: this.state.config.sumTarget, potentialProfit: 0 };
     }
 
     const oppositeSide = this.currentCycle.leg1Side === 'UP' ? 'DOWN' : 'UP';
     const oppositeOrderbook = this.orderbooks[oppositeSide];
 
     if (!oppositeOrderbook || !oppositeOrderbook.asks[0]) {
-      return { met: false, leg1Price: this.currentCycle.leg1Price, oppositeAsk: 0, sum: 0, target: this.state.config.sumTarget };
+      return { met: false, avgCost: this.getAverageCost(), oppositeAsk: 0, sum: 0, target: this.state.config.sumTarget, potentialProfit: 0 };
     }
 
-    const leg1Price = this.currentCycle.leg1Price;
+    const avgCost = this.getAverageCost();
     const oppositeAsk = oppositeOrderbook.asks[0].price;
-    const sum = leg1Price + oppositeAsk;
+    const sum = avgCost + oppositeAsk;
+    
+    // Calculate potential profit: shares * $1 payout - total cost
+    const potentialTotalCost = this.leg1TotalCost + (this.leg1TotalShares * oppositeAsk);
+    const potentialProfit = this.leg1TotalShares * 1.0 - potentialTotalCost;
 
     return {
       met: sum <= this.state.config.sumTarget,
-      leg1Price,
+      avgCost,
       oppositeAsk,
       sum,
       target: this.state.config.sumTarget,
+      potentialProfit,
     };
   }
 
-  private async executeLeg2(hedge: HedgeCondition) {
+  private async executeHedge(hedge: HedgeCondition) {
     if (!this.currentCycle || !this.currentCycle.leg1Side) return;
 
     const { config } = this.state;
     const side = this.currentCycle.leg1Side === 'UP' ? 'DOWN' : 'UP';
     const price = hedge.oppositeAsk;
-    const cost = config.shares * price;
+    const shares = this.leg1TotalShares; // Match leg1 shares for full hedge
+    const cost = shares * price;
 
-    // Check if we have enough cash
     if (cost > this.portfolio.cash) {
-      logger.warn('Insufficient cash for Leg 2', { cost, cash: this.portfolio.cash });
+      logger.warn('Insufficient cash for hedge', { cost, cash: this.portfolio.cash });
       return;
     }
 
-    const lockedProfit = config.shares * 1.0 - (cost + (this.currentCycle.totalCost || 0));
-    
+    const totalCost = this.leg1TotalCost + cost;
+    const lockedProfit = shares * 1.0 - totalCost;
+    const lockedPct = ((1.0 - (totalCost / shares)) * 100);
+
     logger.info('');
     logger.info('🎯 ═══════════════════════════════════════════════════════════');
-    logger.info('🎯 HEDGE CONDITION MET! EXECUTING LEG 2');
-    logger.info(`🎯 Hedging ${side} @ $${price.toFixed(4)}`);
-    logger.info(`🎯 Sum: ${hedge.sum.toFixed(4)} (target: ${config.sumTarget})`);
-    logger.info(`🎯 Buying ${config.shares} shares`);
-    logger.info(`🎯 Cost: $${cost.toFixed(2)}`);
-    logger.info(`🎯 LOCKED PROFIT: $${lockedProfit.toFixed(2)} (${((lockedProfit / config.shares) * 100).toFixed(1)}%)`);
-    logger.info(`🎯 Market: https://polymarket.com/event/${this.currentMarket?.slug}`);
+    logger.info('🎯 HEDGE CONDITION MET! LOCKING PROFIT');
+    logger.info(`🎯 Avg cost: $${hedge.avgCost.toFixed(4)} + Opposite ask: $${price.toFixed(4)} = $${hedge.sum.toFixed(4)}`);
+    logger.info(`🎯 Target: ≤ $${config.sumTarget}`);
+    logger.info(`🎯 Buying ${shares} ${side} @ $${price.toFixed(4)}`);
+    logger.info(`🎯 ✅ LOCKED PROFIT: $${lockedProfit.toFixed(2)} (${lockedPct.toFixed(1)}%)`);
     logger.info('🎯 ═══════════════════════════════════════════════════════════');
     logger.info('');
 
-    // Execute paper trade
+    // Execute trade
     const trade = await this.execution.buy({
       marketSlug: this.currentMarket!.slug,
       leg: 2,
       side,
       tokenId: side === 'UP' ? this.currentMarket!.tokenUp! : this.currentMarket!.tokenDown!,
-      shares: config.shares,
+      shares,
       price,
       cycleId: this.currentCycle.id,
       currentCash: this.portfolio.cash,
@@ -490,33 +525,21 @@ export class TradingEngine extends EventEmitter {
 
     // Update portfolio
     this.portfolio.cash = trade.cashAfter;
-    this.portfolio.positions[side] += config.shares;
-
-    // Calculate locked-in profit
-    const totalCost = (this.currentCycle.totalCost || 0) + cost;
-    const lockedInProfit = config.shares * 1.0 - totalCost; // Payout is $1 per share
-    const lockedInPct = ((1.0 - (totalCost / config.shares)) * 100);
+    this.portfolio.positions[side] += shares;
 
     // Update cycle
     this.currentCycle.leg2Side = side;
     this.currentCycle.leg2Price = price;
     this.currentCycle.leg2Time = new Date();
-    this.currentCycle.leg2Shares = config.shares;
+    this.currentCycle.leg2Shares = shares;
     this.currentCycle.totalCost = totalCost;
-    this.currentCycle.lockedInProfit = lockedInProfit;
-    this.currentCycle.lockedInPct = lockedInPct;
+    this.currentCycle.lockedInProfit = lockedProfit;
+    this.currentCycle.lockedInPct = lockedPct;
     this.currentCycle.status = 'complete';
     this.currentCycle.endedAt = new Date();
 
     await this.db.updateCycle(this.currentCycle);
     await this.saveEquitySnapshot();
-
-    logger.info('Cycle complete - Profit locked in', {
-      cycleId: this.currentCycle.id,
-      totalCost: totalCost.toFixed(4),
-      lockedInProfit: lockedInProfit.toFixed(4),
-      lockedInPct: lockedInPct.toFixed(2) + '%',
-    });
 
     this.emit('trade', trade);
     this.emit('leg2', { cycle: this.currentCycle, trade });
@@ -524,6 +547,46 @@ export class TradingEngine extends EventEmitter {
 
     // Reset for next cycle
     this.currentCycle = null;
+    this.resetDCATracking();
+  }
+
+  private async executeBreakevenExit(side: 'UP' | 'DOWN', currentBid: number, avgCost: number) {
+    if (!this.currentCycle) return;
+
+    const exitValue = this.leg1TotalShares * currentBid;
+    const pnl = exitValue - this.leg1TotalCost;
+
+    // Only exit if truly at breakeven or profit
+    if (pnl < 0) return;
+
+    logger.info('');
+    logger.info('🛡️ ═══════════════════════════════════════════════════════════');
+    logger.info('🛡️ BREAKEVEN EXIT - PRICE RECOVERED');
+    logger.info(`🛡️ Avg cost: $${avgCost.toFixed(4)} | Current bid: $${currentBid.toFixed(4)}`);
+    logger.info(`🛡️ Selling ${this.leg1TotalShares} ${side} for $${exitValue.toFixed(2)}`);
+    logger.info(`🛡️ P&L: $${pnl.toFixed(2)} (${((pnl / this.leg1TotalCost) * 100).toFixed(1)}%)`);
+    logger.info('🛡️ ═══════════════════════════════════════════════════════════');
+    logger.info('');
+
+    // Update portfolio
+    this.portfolio.cash += exitValue;
+    this.portfolio.realizedPnL += pnl;
+    this.portfolio.positions[side] = 0;
+
+    // Update cycle
+    this.currentCycle.status = 'complete';
+    this.currentCycle.endedAt = new Date();
+    this.currentCycle.exitPrice = currentBid;
+    this.currentCycle.exitPnL = pnl;
+    this.currentCycle.lockedInProfit = pnl;
+    this.currentCycle.lockedInPct = (pnl / this.leg1TotalCost) * 100;
+
+    await this.db.updateCycle(this.currentCycle);
+    await this.saveEquitySnapshot();
+
+    // Reset for next cycle
+    this.currentCycle = null;
+    this.resetDCATracking();
   }
 
   private async saveEquitySnapshot() {
@@ -551,13 +614,18 @@ export class TradingEngine extends EventEmitter {
     );
   }
 
-  // Public API methods
+  // ─── Public API Methods ────────────────────────────────────────────────────
 
   async enable(config: Partial<BotConfig>) {
     this.state.enabled = true;
     this.state.config = { ...this.state.config, ...config };
     await this.db.saveBotState(this.state);
-    logger.info('Bot enabled', { config: this.state.config });
+    logger.info('Bot enabled with BULLETPROOF strategy', { 
+      entryThreshold: this.state.config.entryThreshold,
+      dcaLevels: this.state.config.dcaLevels,
+      sumTarget: this.state.config.sumTarget,
+      breakevenEnabled: this.state.config.breakevenEnabled,
+    });
   }
 
   async disable() {
@@ -598,7 +666,6 @@ export class TradingEngine extends EventEmitter {
   }
 
   async setTradingMode(mode: 'PAPER' | 'LIVE') {
-    // Don't allow switching while bot is enabled with open positions
     if (this.state.enabled && (this.portfolio.positions.UP > 0 || this.portfolio.positions.DOWN > 0)) {
       throw new Error('Cannot switch trading mode while bot has open positions. Close positions first.');
     }
@@ -625,13 +692,6 @@ export class TradingEngine extends EventEmitter {
 
   getStatus(): LiveStatus {
     const now = Date.now();
-    let watcherSecondsRemaining = 0;
-
-    if (this.watcherActive && this.watcherStartTime) {
-      const elapsed = (now - this.watcherStartTime) / 1000;
-      const windowSec = this.state.config.windowMin * 60;
-      watcherSecondsRemaining = Math.max(0, windowSec - elapsed);
-    }
 
     return {
       bot: this.state,
@@ -639,30 +699,25 @@ export class TradingEngine extends EventEmitter {
       currentMarket: this.currentMarket,
       orderbooks: this.orderbooks,
       currentCycle: this.currentCycle,
-      watcherActive: this.watcherActive,
-      watcherSecondsRemaining,
+      watcherActive: this.currentCycle?.status === 'pending',
+      watcherSecondsRemaining: 0,
       uptime: now - this.startTime,
       lastUpdate: now,
       executionMetrics: this.getExecutionMetrics(),
     };
   }
 
-  /**
-   * Get execution metrics for live trading status display.
-   */
   private getExecutionMetrics() {
-    // Return mock metrics for paper mode, real metrics for live mode
     if (this.state.tradingMode === 'PAPER') {
       return {
         ordersSent: 0,
         ordersFilled: 0,
-        avgLatencyMs: 0.5, // Paper trading latency
+        avgLatencyMs: 0.5,
         fillRate: 'N/A (Paper)',
         lastError: null,
       };
     }
     
-    // For live mode, this would come from the LiveExecution instance
     return {
       ordersSent: 0,
       ordersFilled: 0,
@@ -680,4 +735,3 @@ export class TradingEngine extends EventEmitter {
     return this.state.enabled;
   }
 }
-
