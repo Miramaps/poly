@@ -50,10 +50,17 @@ export function MarketInfo({
         <div className="text-muted text-center py-4">No market selected</div>
       ) : (
         <div className="space-y-4">
-          {/* Market slug */}
+          {/* Market URL */}
           <div>
             <div className="text-sm text-muted">Market</div>
-            <div className="font-mono text-sm mt-1 truncate">{market.slug}</div>
+            <a
+              href={`https://polymarket.com/event/${market.slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-sm mt-1 text-accent hover:underline break-all block"
+            >
+              polymarket.com/event/{market.slug}
+            </a>
           </div>
 
           {/* Status */}
