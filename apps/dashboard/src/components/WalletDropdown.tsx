@@ -44,12 +44,19 @@ export function WalletDropdown({ tradingMode, onTradingModeChange }: WalletDropd
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawing, setWithdrawing] = useState(false);
 
+  // Determine wallet status
+  const getWalletStatus = (): 'ready' | 'pending' | 'error' => {
+    if (loading && !wallet) return 'pending'; // Still loading
+    if (wallet === null) return 'error'; // Failed to fetch
+    return wallet.hasWallet ? 'ready' : 'pending';
+  };
+
   // Live status indicators
   const liveStatus: LiveStatusItem[] = [
     { label: 'Order Signing', detail: 'HMAC-SHA256 signature', status: 'ready', latency: '<1ms' },
-    { label: 'Wallet Integration', detail: 'Polygon USDC', status: wallet?.hasWallet ? 'ready' : 'pending' },
+    { label: 'Wallet Integration', detail: wallet?.hasWallet ? `${wallet.address?.slice(0, 6)}...${wallet.address?.slice(-4)}` : 'No wallet', status: getWalletStatus() },
     { label: 'Order Submission', detail: 'POST /order', status: 'ready', latency: '~1ms' },
-    { label: 'Balance Checking', detail: 'GET /balance', status: 'ready' },
+    { label: 'Balance Checking', detail: wallet?.hasWallet ? `$${wallet.balance.usdc.toFixed(2)} USDC` : 'No wallet', status: wallet?.hasWallet ? 'ready' : 'pending' },
     { label: 'Order Confirmation', detail: 'WebSocket updates', status: 'ready' },
     { label: 'Gas Estimation', detail: 'Polygon network', status: 'ready' },
   ];
@@ -69,12 +76,22 @@ export function WalletDropdown({ tradingMode, onTradingModeChange }: WalletDropd
   const fetchWallet = async () => {
     try {
       setLoading(true);
+      setError(null);
       const response = await getWallet();
       if (response.success) {
         setWallet(response.data);
+      } else {
+        setError('Failed to load wallet data');
       }
     } catch (err) {
       console.error('Failed to fetch wallet:', err);
+      // Set a default "no wallet" state on error so UI shows properly
+      setWallet({
+        hasWallet: false,
+        address: null,
+        balance: { usdc: 0, matic: 0 },
+        canGenerateNew: true,
+      });
     } finally {
       setLoading(false);
     }
@@ -499,6 +516,24 @@ export function WalletDropdown({ tradingMode, onTradingModeChange }: WalletDropd
                   </div>
                 </div>
               ))}
+
+              {/* Show action prompt if wallet not configured */}
+              {!wallet?.hasWallet && !loading && (
+                <div className="mt-3 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                  <p className="text-yellow-400 text-xs mb-2">
+                    🔐 Generate a wallet to enable live trading
+                  </p>
+                  <button
+                    onClick={() => {
+                      setActiveTab('wallet');
+                      setShowGenerateConfirm(true);
+                    }}
+                    className="w-full py-1.5 bg-white text-black rounded text-xs font-medium hover:bg-white/90"
+                  >
+                    Generate Wallet
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

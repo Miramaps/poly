@@ -6,10 +6,10 @@ import { cn } from '@/lib/utils';
 import { WalletDropdown } from './WalletDropdown';
 
 const navItems = [
-  { href: '/', label: 'Overview', icon: '📊' },
-  { href: '/cycles', label: 'Cycles', icon: '🔄' },
-  { href: '/trades', label: 'Trades', icon: '💹' },
-  { href: '/terminal', label: 'Terminal', icon: '⌨️' },
+  { href: '/', label: 'Overview' },
+  { href: '/cycles', label: 'Cycles' },
+  { href: '/trades', label: 'Trades' },
+  { href: '/terminal', label: 'Terminal' },
 ];
 
 interface NavigationProps {
@@ -27,9 +27,8 @@ export function Navigation({ isConnected, botEnabled, tradingMode = 'PAPER', onT
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">💎</span>
-            <span className="font-bold text-xl tracking-tight">POLY TRADER</span>
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-xl tracking-tight">POLYFCKKER666</span>
           </div>
 
           {/* Nav Links */}
@@ -45,7 +44,6 @@ export function Navigation({ isConnected, botEnabled, tradingMode = 'PAPER', onT
                     : 'text-muted hover:text-foreground hover:bg-foreground/5'
                 )}
               >
-                <span className="mr-2">{item.icon}</span>
                 {item.label}
               </Link>
             ))}

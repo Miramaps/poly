@@ -18,20 +18,48 @@ interface BuyParams {
 }
 
 /**
- * PaperExecution handles simulated order execution.
+ * PaperExecution handles simulated order execution with REALISTIC LATENCY.
  * 
- * This class is designed to be swappable with a LiveExecution class
- * for real trading. The interface is the same, only the implementation differs.
+ * Simulates real-world conditions:
+ * - Network latency (100-200ms delay)
+ * - Slippage (price moves 0.5-2% against you during execution)
+ * 
+ * This gives accurate results for profitability testing.
  */
 export class PaperExecution {
   private db: Database;
+  
+  // Simulation settings
+  private readonly LATENCY_MIN_MS = 80;   // Minimum simulated latency
+  private readonly LATENCY_MAX_MS = 200;  // Maximum simulated latency
+  private readonly SLIPPAGE_MIN = 0.005;  // 0.5% minimum slippage
+  private readonly SLIPPAGE_MAX = 0.02;   // 2% maximum slippage
 
   constructor(db: Database) {
     this.db = db;
   }
 
   /**
-   * Execute a paper buy order.
+   * Simulate network latency
+   */
+  private async simulateLatency(): Promise<number> {
+    const latency = this.LATENCY_MIN_MS + Math.random() * (this.LATENCY_MAX_MS - this.LATENCY_MIN_MS);
+    await new Promise(resolve => setTimeout(resolve, latency));
+    return latency;
+  }
+
+  /**
+   * Simulate slippage - price moves against you during execution
+   * For buys: price goes UP (you pay more)
+   */
+  private simulateSlippage(price: number): number {
+    const slippagePct = this.SLIPPAGE_MIN + Math.random() * (this.SLIPPAGE_MAX - this.SLIPPAGE_MIN);
+    const slippedPrice = price * (1 + slippagePct);
+    return Math.min(slippedPrice, 0.99); // Cap at 0.99
+  }
+
+  /**
+   * Execute a paper buy order with REALISTIC latency and slippage.
    * 
    * @param params - Buy order parameters
    * @returns Trade object representing the executed order
@@ -39,8 +67,17 @@ export class PaperExecution {
   async buy(params: BuyParams): Promise<Trade> {
     const { marketSlug, leg, side, tokenId, shares, price, cycleId, currentCash, feeBps } = params;
 
-    // Calculate cost and fee
-    const grossCost = shares * price;
+    const startTime = Date.now();
+
+    // Simulate API call latency
+    const latency = await this.simulateLatency();
+
+    // Simulate slippage - price moves against us during execution
+    const executedPrice = this.simulateSlippage(price);
+    const slippagePct = ((executedPrice - price) / price * 100).toFixed(2);
+
+    // Calculate cost with slipped price
+    const grossCost = shares * executedPrice;
     const fee = (grossCost * feeBps) / 10000;
     const totalCost = grossCost + fee;
 
@@ -60,7 +97,7 @@ export class PaperExecution {
       side,
       tokenId,
       shares,
-      price,
+      price: executedPrice,  // Use slipped price
       cost: totalCost,
       fee,
       cashAfter,
@@ -70,13 +107,19 @@ export class PaperExecution {
     // Persist to database
     await this.db.createTrade(trade);
 
-    logger.info('Paper trade executed', {
+    const totalTime = Date.now() - startTime;
+
+    logger.info('📝 Paper trade executed (realistic mode)', {
       leg,
       side,
       shares,
-      price: price.toFixed(4),
+      requestedPrice: price.toFixed(4),
+      executedPrice: executedPrice.toFixed(4),
+      slippage: `+${slippagePct}%`,
       cost: totalCost.toFixed(4),
       cashAfter: cashAfter.toFixed(4),
+      latencyMs: latency.toFixed(0),
+      totalMs: totalTime,
     });
 
     return trade;

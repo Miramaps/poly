@@ -1,4 +1,4 @@
-import { Wallet, ethers } from 'ethers';
+import { Wallet, HDNodeWallet, ethers } from 'ethers';
 import crypto from 'crypto';
 import { createBufferedLogger } from '../utils/logger.js';
 
@@ -35,7 +35,7 @@ export interface WalletBalance {
 export class WalletService {
   private provider: ethers.JsonRpcProvider;
   private encryptionKey: Buffer;
-  private currentWallet: Wallet | null = null;
+  private currentWallet: Wallet | HDNodeWallet | null = null;
   private storedWallet: StoredWallet | null = null;
 
   constructor() {

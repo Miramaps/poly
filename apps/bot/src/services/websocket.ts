@@ -6,106 +6,89 @@ const logger = createBufferedLogger('websocket');
 
 type OrderbookCallback = (orderbook: Orderbook) => void;
 
+// Polymarket CLOB REST API endpoint
+const CLOB_API = 'https://clob.polymarket.com';
+
 /**
- * WebSocketManager handles connections to Polymarket's orderbook WebSocket feeds.
- * 
- * Note: Polymarket uses a specific WebSocket protocol. This implementation
- * is structured for the CLOB WebSocket API but may need adjustments based
- * on actual API documentation.
+ * WebSocketManager handles orderbook data from Polymarket.
+ * Uses REST API polling as primary method (more reliable than WebSocket).
  */
 export class WebSocketManager {
-  private connections: Map<string, WebSocket> = new Map();
   private callbacks: Map<string, OrderbookCallback> = new Map();
-  private reconnectTimeouts: Map<string, NodeJS.Timeout> = new Map();
-  private baseUrl: string;
+  private pollIntervals: Map<string, NodeJS.Timeout> = new Map();
+  private lastOrderbooks: Map<string, Orderbook> = new Map();
 
-  constructor() {
-    // Polymarket CLOB WebSocket endpoint
-    this.baseUrl = process.env.POLYMARKET_WS_URL || 'wss://ws-subscriptions-clob.polymarket.com/ws/market';
-  }
+  constructor() {}
 
   /**
    * Subscribe to orderbook updates for a specific token.
+   * Uses REST API polling for reliability.
    */
   subscribeToOrderbook(tokenId: string, callback: OrderbookCallback) {
-    if (this.connections.has(tokenId)) {
-      logger.warn('Already subscribed to token', { tokenId });
+    if (this.pollIntervals.has(tokenId)) {
+      logger.warn('Already subscribed to token', { tokenId: tokenId.slice(0, 20) + '...' });
       this.callbacks.set(tokenId, callback);
       return;
     }
 
     this.callbacks.set(tokenId, callback);
-    this.connect(tokenId);
+    
+    // Fetch immediately
+    this.fetchOrderbook(tokenId);
+    
+    // Then poll every 500ms for live updates
+    const interval = setInterval(() => {
+      this.fetchOrderbook(tokenId);
+    }, 500);
+    
+    this.pollIntervals.set(tokenId, interval);
+    logger.info('Subscribed to orderbook', { tokenId: tokenId.slice(0, 20) + '...' });
   }
 
-  private connect(tokenId: string) {
+  /**
+   * Fetch orderbook from REST API
+   */
+  private async fetchOrderbook(tokenId: string) {
     try {
-      const wsUrl = `${this.baseUrl}`;
-      const ws = new WebSocket(wsUrl);
-
-      ws.on('open', () => {
-        logger.info('WebSocket connected', { tokenId });
-        
-        // Subscribe to the token's orderbook
-        const subscribeMsg = {
-          type: 'subscribe',
-          channel: 'book',
-          assets_id: tokenId,
-        };
-        ws.send(JSON.stringify(subscribeMsg));
-      });
-
-      ws.on('message', (data: Buffer) => {
-        try {
-          const message = JSON.parse(data.toString());
-          this.handleMessage(tokenId, message);
-        } catch (err) {
-          logger.error('Failed to parse WebSocket message', { error: (err as Error).message });
-        }
-      });
-
-      ws.on('error', (err) => {
-        logger.error('WebSocket error', { tokenId, error: err.message });
-      });
-
-      ws.on('close', () => {
-        logger.warn('WebSocket closed', { tokenId });
-        this.connections.delete(tokenId);
-        this.scheduleReconnect(tokenId);
-      });
-
-      this.connections.set(tokenId, ws);
-    } catch (err) {
-      logger.error('Failed to connect WebSocket', { tokenId, error: (err as Error).message });
-      this.scheduleReconnect(tokenId);
-    }
-  }
-
-  private handleMessage(tokenId: string, message: any) {
-    const callback = this.callbacks.get(tokenId);
-    if (!callback) return;
-
-    // Parse orderbook update
-    // Note: Actual message format depends on Polymarket's API
-    if (message.type === 'book' || message.event === 'book') {
-      const orderbook = this.parseOrderbook(message);
+      const response = await fetch(`${CLOB_API}/book?token_id=${tokenId}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const data = await response.json();
+      const orderbook = this.parseOrderbook(data);
+      
       if (orderbook) {
-        callback(orderbook);
+        this.lastOrderbooks.set(tokenId, orderbook);
+        const callback = this.callbacks.get(tokenId);
+        if (callback) {
+          callback(orderbook);
+        }
+      }
+    } catch (err) {
+      // Only log errors occasionally to avoid spam
+      const lastOb = this.lastOrderbooks.get(tokenId);
+      if (!lastOb || Date.now() - lastOb.timestamp > 10000) {
+        logger.error('Failed to fetch orderbook', { 
+          tokenId: tokenId.slice(0, 20) + '...', 
+          error: (err as Error).message 
+        });
       }
     }
   }
 
-  private parseOrderbook(message: any): Orderbook | null {
+  private parseOrderbook(data: any): Orderbook | null {
     try {
-      // Polymarket CLOB format (may need adjustment based on actual API)
-      const bids: OrderbookLevel[] = (message.bids || []).map((b: any) => ({
-        price: parseFloat(b.price || b[0]),
-        size: parseFloat(b.size || b[1]),
+      // Polymarket CLOB REST API format
+      const bids: OrderbookLevel[] = (data.bids || []).map((b: any) => ({
+        price: parseFloat(b.price),
+        size: parseFloat(b.size),
       }));
 
-      const asks: OrderbookLevel[] = (message.asks || []).map((a: any) => ({
-        price: parseFloat(a.price || a[0]),
-        size: parseFloat(a.size || a[1]),
+      const asks: OrderbookLevel[] = (data.asks || []).map((a: any) => ({
+        price: parseFloat(a.price),
+        size: parseFloat(a.size),
       }));
 
       // Sort: bids descending, asks ascending
@@ -123,66 +106,37 @@ export class WebSocketManager {
     }
   }
 
-  private scheduleReconnect(tokenId: string) {
-    // Clear existing timeout
-    const existingTimeout = this.reconnectTimeouts.get(tokenId);
-    if (existingTimeout) {
-      clearTimeout(existingTimeout);
-    }
-
-    // Only reconnect if we still have a callback registered
-    if (!this.callbacks.has(tokenId)) return;
-
-    const timeout = setTimeout(() => {
-      logger.info('Attempting to reconnect', { tokenId });
-      this.connect(tokenId);
-    }, 5000);
-
-    this.reconnectTimeouts.set(tokenId, timeout);
-  }
-
   /**
    * Unsubscribe from a token's orderbook updates.
    */
   unsubscribe(tokenId: string) {
-    const ws = this.connections.get(tokenId);
-    if (ws) {
-      ws.close();
-      this.connections.delete(tokenId);
+    const interval = this.pollIntervals.get(tokenId);
+    if (interval) {
+      clearInterval(interval);
+      this.pollIntervals.delete(tokenId);
     }
     this.callbacks.delete(tokenId);
-
-    const timeout = this.reconnectTimeouts.get(tokenId);
-    if (timeout) {
-      clearTimeout(timeout);
-      this.reconnectTimeouts.delete(tokenId);
-    }
+    this.lastOrderbooks.delete(tokenId);
   }
 
   /**
-   * Disconnect all WebSocket connections.
+   * Disconnect all connections.
    */
   disconnect() {
-    for (const [tokenId, ws] of this.connections) {
-      ws.close();
+    for (const interval of this.pollIntervals.values()) {
+      clearInterval(interval);
     }
-    this.connections.clear();
+    this.pollIntervals.clear();
     this.callbacks.clear();
-
-    for (const timeout of this.reconnectTimeouts.values()) {
-      clearTimeout(timeout);
-    }
-    this.reconnectTimeouts.clear();
-
-    logger.info('All WebSocket connections closed');
+    this.lastOrderbooks.clear();
+    logger.info('All orderbook subscriptions stopped');
   }
 
   /**
-   * Check if connected to a specific token.
+   * Check if subscribed to a specific token.
    */
   isConnected(tokenId: string): boolean {
-    const ws = this.connections.get(tokenId);
-    return ws !== undefined && ws.readyState === WebSocket.OPEN;
+    return this.pollIntervals.has(tokenId);
   }
 
   /**

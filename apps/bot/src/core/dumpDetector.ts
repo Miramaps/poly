@@ -23,8 +23,12 @@ export class DumpDetector {
     this.triggered = { UP: false, DOWN: false };
   }
 
+  // Minimum valid price - below this is considered empty orderbook
+  private readonly MIN_VALID_PRICE = 0.05;
+
   addPriceSnapshot(side: 'UP' | 'DOWN', price: number) {
-    if (price <= 0) return;
+    // Ignore invalid prices (0, negative, or empty orderbook indicator)
+    if (price <= 0 || price < this.MIN_VALID_PRICE) return;
 
     const now = Date.now();
     this.snapshots[side].push({ timestamp: now, price });

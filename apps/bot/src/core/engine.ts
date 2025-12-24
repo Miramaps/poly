@@ -189,6 +189,33 @@ export class TradingEngine extends EventEmitter {
     logger.info(`   🪙 Token DOWN: ${market.tokenDown?.slice(0, 20)}...`);
     logger.info('═══════════════════════════════════════════════════════════════');
 
+    // Save market to database first (required for foreign key)
+    await this.db.upsertMarket(market);
+
+    // If market is already live and within watcher window, activate watcher immediately
+    if (market.status === 'live' && market.startTime) {
+      const elapsedMin = (Date.now() - market.startTime.getTime()) / 1000 / 60;
+      if (elapsedMin < this.state.config.windowMin) {
+        logger.info(`🔔 Market already LIVE - activating watcher (${elapsedMin.toFixed(1)} min elapsed)`);
+        this.watcherActive = true;
+        this.watcherStartTime = market.startTime.getTime();
+        
+        // Create pending cycle
+        this.currentCycle = {
+          id: nanoid(),
+          marketSlug: market.slug,
+          startedAt: new Date(),
+          status: 'pending',
+        };
+        await this.db.createCycle(this.currentCycle);
+      } else {
+        logger.warn(`⏰ Market LIVE but watcher window expired (${elapsedMin.toFixed(1)} min > ${this.state.config.windowMin} min)`);
+      }
+    }
+
+    // Unsubscribe from ALL old tokens before subscribing to new ones
+    this.wsManager.disconnect();
+
     // Subscribe to orderbook updates
     if (market.tokenUp && market.tokenDown) {
       let lastLogTime = 0;

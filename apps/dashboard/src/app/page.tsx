@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { Navigation } from '@/components/Navigation';
+import { ConfigBar } from '@/components/ConfigBar';
 import { StatusCard } from '@/components/StatusCard';
 import { EquityChart } from '@/components/EquityChart';
 import { OrderbookDisplay } from '@/components/OrderbookDisplay';
-import { ConfigPanel } from '@/components/ConfigPanel';
 import { MarketInfo } from '@/components/MarketInfo';
 import { CycleInfo } from '@/components/CycleInfo';
-import { Terminal } from '@/components/Terminal';
-import { LiveTradingStatus } from '@/components/LiveTradingStatus';
+import { LogViewer } from '@/components/LogViewer';
+import { CommandInput } from '@/components/CommandInput';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { getEquity, getStatus } from '@/lib/api';
 import { formatCurrency, formatPercent, formatDuration } from '@/lib/utils';
@@ -78,6 +78,7 @@ export default function DashboardPage() {
         tradingMode={tradingMode}
         onTradingModeChange={setTradingMode}
       />
+      <ConfigBar config={botConfig} />
 
       <main className="max-w-7xl mx-auto px-4 py-6">
         {/* Header Stats */}
@@ -108,13 +109,10 @@ export default function DashboardPage() {
 
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          {/* Left Column - Live Status & Terminal */}
-          <div className="lg:col-span-2 space-y-6">
-            <LiveTradingStatus 
-              isLiveMode={currentStatus?.bot?.tradingMode === 'LIVE'}
-              executionMetrics={currentStatus?.executionMetrics}
-            />
-            <Terminal logs={logs} className="h-[400px]" />
+          {/* Left Column - Logs & Commands */}
+          <div className="lg:col-span-2 space-y-4">
+            <LogViewer logs={logs} className="h-[300px]" />
+            <CommandInput className="h-[400px]" />
           </div>
 
           {/* Right Column - Info Panels */}
@@ -130,8 +128,7 @@ export default function DashboardPage() {
               watcherActive={currentStatus?.watcherActive}
               watcherSecondsRemaining={currentStatus?.watcherSecondsRemaining}
             />
-            <CycleInfo cycle={currentCycle} />
-            <ConfigPanel config={botConfig} />
+            <CycleInfo cycle={currentCycle} orderbooks={orderbooks} />
           </div>
         </div>
 

@@ -146,7 +146,7 @@ export function Terminal({ logs, onCommand, className }: TerminalProps) {
       {/* Input */}
       <div className="border-t border-border p-3 bg-black/20">
         <div className="flex items-center gap-2">
-          <span className="text-accent font-mono">💹 poly&gt;</span>
+          <span className="text-accent font-mono">poly&gt;</span>
           <input
             ref={inputRef}
             type="text"
