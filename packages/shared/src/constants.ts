@@ -31,7 +31,7 @@ export const DEFAULT_CONFIG: {
   maxHoldMinutes: 0,           // 0 = hold forever until breakeven or hedge
   
   // Legacy (kept for compatibility)
-  move: 0.15,
+  move: 0.36,
   windowMin: 15,               // Watch for full 15 minutes
   dumpWindowSec: 3,
   feeBps: 0,

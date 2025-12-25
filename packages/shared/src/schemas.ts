@@ -15,7 +15,7 @@ export const BotConfigSchema = z.object({
 export const AutoOnParamsSchema = z.object({
   shares: z.number().positive(),
   sumTarget: z.number().min(0).max(1).optional().default(0.95),
-  move: z.number().min(0).max(1).optional().default(0.15),
+  move: z.number().min(0).max(1).optional().default(0.36),
   windowMin: z.number().positive().optional().default(2),
   dumpWindowSec: z.number().positive().optional().default(3),
 });
