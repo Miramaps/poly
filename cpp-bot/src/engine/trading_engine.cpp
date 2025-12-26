@@ -148,6 +148,10 @@ EngineStatus TradingEngine::get_status() const {
     } else {
         status.current_cycle.active = false;
         status.current_cycle.status = "pending";
+        // Show last completed cycle if available
+        if (!last_completed_cycle_.leg1_side.empty()) {
+            status.current_cycle = last_completed_cycle_;
+        }
     }
 
     return status;
@@ -333,6 +337,17 @@ std::ostringstream oss2;
                 std::cout << "╚══════════════════════════════════════════════════════════╝\n" << std::endl;
                 
                 // Clear position
+                // Save completed cycle for display
+                last_completed_cycle_.active = false;
+                last_completed_cycle_.status = "complete";
+                last_completed_cycle_.leg1_side = current_position_->side;
+                last_completed_cycle_.leg1_price = current_position_->avg_cost;
+                last_completed_cycle_.leg1_shares = current_position_->shares;
+                last_completed_cycle_.leg2_side = opposite_side;
+                last_completed_cycle_.leg2_price = hedge_price;
+                last_completed_cycle_.leg2_shares = current_position_->shares;
+                last_completed_cycle_.total_cost = current_position_->total_cost + trade->cost;
+                last_completed_cycle_.pnl = profit;
                 current_position_.reset();
                 last_cycle_complete_time_ = std::chrono::system_clock::now();
             }

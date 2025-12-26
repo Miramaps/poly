@@ -78,6 +78,7 @@ struct EngineStatus {
         double pnl = 0;
     };
     CurrentCycle current_cycle;
+    CurrentCycle last_completed_cycle;
 };
 
 class AsyncTradeWriter;
@@ -160,6 +161,7 @@ private:
     
     std::optional<Position> current_position_;
     std::chrono::system_clock::time_point last_cycle_complete_time_;
+    EngineStatus::CurrentCycle last_completed_cycle_;
     
     // Trade history (in-memory)
     std::vector<Trade> trade_history_;
