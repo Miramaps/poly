@@ -41,3 +41,4 @@ DASH_PID=$!
 trap "kill $BOT_PID $DASH_PID 2>/dev/null" EXIT
 wait
 
+

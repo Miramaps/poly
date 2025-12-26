@@ -34,4 +34,5 @@ void set_live_prices(double up_price, double down_price);
 void set_market_info(const std::string& slug, const std::string& question);
 void set_engine_ptr(TradingEngine* engine);
 
+std::string get_status_json();
 } // namespace poly

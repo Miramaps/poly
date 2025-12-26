@@ -278,3 +278,4 @@ canExitBreakeven = (currentBid ≥ avgCost) && (exitValue - totalCost ≥ 0)
 
 **Core Principle:** Never sell at a loss. Either hedge for profit or wait for breakeven.
 
+

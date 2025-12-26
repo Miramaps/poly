@@ -3,6 +3,7 @@
 #include "api_server.hpp"
 #include "polymarket_client.hpp"
 #include "websocket_client.hpp"
+#include "ws_server.hpp"
 #include <iostream>
 #include <csignal>
 #include <memory>
@@ -18,7 +19,10 @@
 using poly::add_log;
 using poly::set_live_prices;
 using poly::set_market_info;
-using poly::set_engine_ptr;
+
+// Global atomic variables for API server access (external linkage)
+std::atomic<double> g_up_price{0.0};
+std::atomic<double> g_down_price{0.0};
 
 namespace {
     std::unique_ptr<poly::APIServer> g_server;
@@ -28,12 +32,7 @@ namespace {
     // Current tokens
     std::string g_up_token;
     std::string g_down_token;
-    std::atomic<double> g_up_price{0.0};
-    std::atomic<double> g_down_price{0.0};
     std::mutex g_price_mutex;
-    
-    // Engine pointer for price callback to feed trading engine
-    poly::TradingEngine* g_engine = nullptr;
     
     // CURL handle for market info (only needed occasionally)
     CURL* g_curl_market = nullptr;
@@ -129,27 +128,6 @@ namespace {
         // Update the API server with latest prices
         set_live_prices(s_up_price, s_down_price);
         
-        // Feed prices to trading engine for execution
-        if (matched && g_engine && s_up_price > 0 && s_down_price > 0) {
-            // Create orderbook snapshots from current prices
-            poly::OrderbookSnapshot up_book;
-            up_book.asks.push_back({s_up_price, 10000.0});  // price, size
-            up_book.bids.push_back({std::max(0.01, s_up_price - 0.01), 10000.0});
-            up_book.timestamp = std::chrono::system_clock::now();
-            
-            poly::OrderbookSnapshot down_book;
-            down_book.asks.push_back({s_down_price, 10000.0});
-            down_book.bids.push_back({std::max(0.01, s_down_price - 0.01), 10000.0});
-            down_book.timestamp = std::chrono::system_clock::now();
-            
-            // Feed to engine - only feed if in trading window (first 2 minutes)
-            int secs_into_window = get_seconds_into_window();
-            if (secs_into_window <= 120) {  // Trading window
-                g_engine->on_orderbook_update(g_up_token, up_book);
-                g_engine->on_orderbook_update(g_down_token, down_book);
-            }
-        }
-        
         // Debug: log every 500th callback (less spam)
         if (callback_count <= 5 || callback_count % 500 == 0) {
             std::cout << "[PRICE CB #" << callback_count << "] " 
@@ -197,8 +175,6 @@ int main() {
         
         poly::TradingEngine engine(config);
         engine.start();
-        set_engine_ptr(&engine);  // Allow API server commands to modify engine config
-        g_engine = &engine;       // Allow price callback to feed trading engine
         std::cout << "[ENGINE] Started" << std::endl;
         
         // Initialize WebSocket
@@ -210,6 +186,7 @@ int main() {
         // Start API server
         g_server = std::make_unique<poly::APIServer>(engine, db, 3001);
         g_server->start();
+        poly::start_ws_server(3002);
         
         std::cout << "\n✓ API: http://localhost:3001\n✓ Dashboard: http://localhost:3000\n\n[RUNNING] WebSocket real-time mode - Ctrl+C to stop\n" << std::endl;
         
@@ -242,14 +219,33 @@ int main() {
                     std::cout << "[TOKENS] UP:   " << g_up_token.substr(0,24) << "..." << std::endl;
                     std::cout << "[TOKENS] DOWN: " << g_down_token.substr(0,24) << "..." << std::endl;
                     
-                    // Update WebSocket subscriptions
-                    g_ws->clear_subscriptions();
+                    // Update WebSocket subscriptions (no clear, just unsubscribe old + subscribe new)
+                    static std::string prev_up_token;
+                    static std::string prev_down_token;
+                    
+                    // Unsubscribe old tokens (if different)
+                    if (!prev_up_token.empty() && prev_up_token != g_up_token) {
+                        g_ws->unsubscribe(prev_up_token);
+                    }
+                    if (!prev_down_token.empty() && prev_down_token != g_down_token) {
+                        g_ws->unsubscribe(prev_down_token);
+                    }
+                    
+                    // Subscribe to new tokens
                     g_ws->subscribe(g_up_token);
                     g_ws->subscribe(g_down_token);
                     
+                    // Store for next switch
+                    prev_up_token = g_up_token;
+                    prev_down_token = g_down_token;
+                    
                     // Reset prices for new market
+                    s_up_price = 0.0;
+                    s_down_price = 0.0;
                     g_up_price.store(0.0);
                     g_down_price.store(0.0);
+                    
+                    poly::add_log("info", "MARKET", "Prices reset, waiting for new market prices...");
                     
                     std::cout << "[MARKET] ═══════════════════════════════════════\n" << std::endl;
                 } else {
@@ -278,6 +274,8 @@ int main() {
                     oss << " | " << time_left << "s";
                     oss << " | WS:" << (g_ws->is_connected() ? "✓" : "✗");
                     poly::add_log("info", "PRICE", oss.str());
+
+                    
                     
                     // Entry signals
                     if (in_trading) {
@@ -301,6 +299,32 @@ int main() {
                 // Log WebSocket status
                 if (!g_ws->is_connected()) {
                     poly::add_log("warn", "WS", "WebSocket disconnected - reconnecting...");
+                }
+            }
+
+            // Broadcast to dashboard WebSocket every 100ms (instant feel)
+            static auto last_broadcast_time = std::chrono::steady_clock::now();
+            auto broadcast_now = std::chrono::steady_clock::now();
+            if (std::chrono::duration_cast<std::chrono::milliseconds>(broadcast_now - last_broadcast_time).count() >= 100) {
+                last_broadcast_time = broadcast_now;
+                {
+                    // Build WebSocket message in format dashboard expects
+                    double up_p = g_up_price.load();
+                    double down_p = g_down_price.load();
+                    int ws_secs = get_seconds_into_window();
+                    int ws_time_left = 900 - ws_secs;
+                    bool ws_in_trading = ws_secs <= 120;
+                    
+                    nlohmann::json ws_msg;
+                    ws_msg["type"] = "status";
+                    ws_msg["upPrice"] = up_p;
+                    ws_msg["downPrice"] = down_p;
+                    ws_msg["market"] = current_slug;
+                    ws_msg["inTrading"] = ws_in_trading;
+                    ws_msg["timeLeft"] = ws_time_left;
+                    ws_msg["wsConnected"] = g_ws && g_ws->is_connected();
+                    ws_msg["autoEnabled"] = true;
+                    poly::broadcast_status(ws_msg.dump());
                 }
             }
         }

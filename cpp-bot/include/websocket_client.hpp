@@ -13,6 +13,7 @@
 #include <thread>
 #include <atomic>
 #include <mutex>
+#include "trading_engine.hpp"
 
 namespace poly {
 
@@ -34,11 +35,13 @@ struct PriceUpdate {
 class WebSocketPriceStream {
 public:
     using PriceCallback = std::function<void(const PriceUpdate& update)>;
+    using OrderbookCallback = std::function<void(const std::string& token_id, const OrderbookSnapshot& snapshot)>;
     
     WebSocketPriceStream();
     ~WebSocketPriceStream();
     
     void set_callback(PriceCallback cb);
+    void set_orderbook_callback(OrderbookCallback cb);
     void subscribe(const std::string& token_id);
     void unsubscribe(const std::string& token_id);
     void clear_subscriptions();
@@ -62,8 +65,11 @@ private:
     std::thread worker_thread_;
     
     PriceCallback callback_;
+    OrderbookCallback orderbook_callback_;
     std::vector<std::string> subscribed_tokens_;
     std::mutex mutex_;
 };
 
+// Get latest orderbook from WebSocket
+OrderbookSnapshot get_latest_orderbook(const std::string& token_id);
 } // namespace poly

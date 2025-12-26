@@ -11,68 +11,21 @@ import { CycleInfo } from '@/components/CycleInfo';
 import { LogViewer } from '@/components/LogViewer';
 import { CommandInput } from '@/components/CommandInput';
 import { useWebSocket } from '@/hooks/useWebSocket';
-import { getEquity, getStatus, getLogs } from '@/lib/api';
-import { formatCurrency, formatPercent, formatDuration } from '@/lib/utils';
+import { formatCurrency, formatPercent } from '@/lib/utils';
 
 export default function DashboardPage() {
-  const { isConnected, status, logs: wsLogs } = useWebSocket();
-  const [equityHistory, setEquityHistory] = useState<any[]>([]);
-  const [initialStatus, setInitialStatus] = useState<any>(null);
+  // Single polling source - useWebSocket handles everything
+  const { isConnected, status, logs } = useWebSocket();
   const [tradingMode, setTradingMode] = useState<'PAPER' | 'LIVE'>('PAPER');
-  const [polledLogs, setPolledLogs] = useState<any[]>([]);
 
-  // Fetch initial data and poll for status updates
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [equityRes, statusRes, logsRes] = await Promise.all([
-          getEquity(500),
-          getStatus(),
-          getLogs(100),
-        ]);
-        setEquityHistory(equityRes.data || []);
-        setInitialStatus(statusRes.data);
-        setPolledLogs(logsRes.data || []);
-        if (statusRes.data?.bot?.tradingMode) {
-          setTradingMode(statusRes.data.bot.tradingMode);
-        }
-      } catch (err) {
-        console.error('Failed to fetch initial data:', err);
-      }
-    };
-    fetchData();
-    
-    // Poll status and logs every 500ms for near-instant updates
-    const pollInterval = setInterval(async () => {
-      try {
-        const [statusRes, logsRes] = await Promise.all([
-          getStatus(),
-          getLogs(100),
-        ]);
-        setInitialStatus(statusRes.data);
-        setPolledLogs(logsRes.data || []);
-        if (statusRes.data?.bot?.tradingMode) {
-          setTradingMode(statusRes.data.bot.tradingMode);
-        }
-      } catch (err) {
-        console.error('Status poll failed:', err);
-      }
-    }, 500);
-    
-    return () => clearInterval(pollInterval);
-  }, []);
-
-  // Update trading mode from WebSocket
+  // Update trading mode from status
   useEffect(() => {
     if (status?.bot?.tradingMode) {
       setTradingMode(status.bot.tradingMode);
     }
   }, [status?.bot?.tradingMode]);
 
-  // Use WebSocket status or fall back to initial
-  const currentStatus = status || initialStatus;
-
-  const portfolio = currentStatus?.portfolio || {
+  const portfolio = status?.portfolio || {
     cash: 1000,
     positions: { UP: 0, DOWN: 0 },
     unrealizedPnL: 0,
@@ -80,12 +33,11 @@ export default function DashboardPage() {
     equity: 1000,
   };
 
-  const botConfig = currentStatus?.bot?.config;
-  const currentCycle = currentStatus?.currentCycle;
-  const orderbooks = currentStatus?.orderbooks || { UP: null, DOWN: null };
+  const botConfig = status?.bot?.config;
+  const currentCycle = status?.currentCycle;
+  const orderbooks = status?.orderbooks || { UP: null, DOWN: null };
 
-  // Build market object from currentMarket data
-  const marketData = currentStatus?.currentMarket;
+  const marketData = status?.currentMarket;
   const timeLeft = marketData?.timeLeft ?? 0;
   const currentMarket = marketData ? {
     slug: marketData.slug,
@@ -95,32 +47,30 @@ export default function DashboardPage() {
     title: marketData.title,
   } : null;
 
-  // Orderbooks - API returns bestAsk/bestBid directly
   const upAsk = orderbooks.UP?.bestAsk;
   const downAsk = orderbooks.DOWN?.bestAsk;
   const upBid = orderbooks.UP?.bestBid;
   const downBid = orderbooks.DOWN?.bestBid;
 
-  const pnlPct = ((portfolio.equity - 1000) / 1000) * 100;
+  const startingEquity = 1000;
+  const equityChange = ((portfolio.equity - startingEquity) / startingEquity) * 100;
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background">
       <Navigation
         isConnected={isConnected}
-        botEnabled={currentStatus?.bot?.enabled}
+        botEnabled={status?.bot?.enabled || false}
         tradingMode={tradingMode}
         onTradingModeChange={setTradingMode}
       />
-      <ConfigBar config={botConfig} />
 
-      <main className="max-w-7xl mx-auto px-4 py-6">
-        {/* Header Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+      <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+        <div className="grid grid-cols-4 gap-4">
           <StatusCard
             title="Equity"
             value={formatCurrency(portfolio.equity)}
-            subtitle={formatPercent(pnlPct)}
-            trend={pnlPct > 0 ? 'up' : pnlPct < 0 ? 'down' : 'neutral'}
+            subtitle={formatPercent(equityChange)}
+            trend={equityChange >= 0 ? 'up' : 'down'}
           />
           <StatusCard
             title="Cash"
@@ -129,46 +79,41 @@ export default function DashboardPage() {
           />
           <StatusCard
             title="Positions"
-            value={`↑${portfolio.positions.UP} | ↓${portfolio.positions.DOWN}`}
+            value={`↑${portfolio.positions?.UP || 0} | ↓${portfolio.positions?.DOWN || 0}`}
             subtitle="UP | DOWN"
           />
           <StatusCard
             title="Realized P&L"
             value={formatCurrency(portfolio.realizedPnL)}
-            trend={portfolio.realizedPnL > 0 ? 'up' : portfolio.realizedPnL < 0 ? 'down' : 'neutral'}
             subtitle="Locked profits"
+            trend={portfolio.realizedPnL >= 0 ? 'up' : 'down'}
           />
         </div>
 
-        {/* Market Info Bar - Full width under stats */}
-        <MarketInfo market={currentMarket} className="mb-6" />
+        <MarketInfo 
+          market={currentMarket} 
+          tradingWindowSec={botConfig?.tradingWindowSec || 120}
+        />
 
-        {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          {/* Left Column - Logs & Commands */}
-          <div className="lg:col-span-2 space-y-4">
-            <LogViewer logs={wsLogs.length > 0 ? wsLogs : polledLogs.map(l => ({ ...l, name: 'BOT' }))} className="h-[300px]" />
-            <CommandInput className="h-[400px]" />
+        <ConfigBar config={botConfig} />
+
+        <div className="grid grid-cols-12 gap-6">
+          <div className="col-span-8 space-y-6">
+            <LogViewer logs={logs || []} />
+            <CommandInput />
           </div>
 
-          {/* Right Column - Info Panels */}
-          <div className="space-y-6">
+          <div className="col-span-4 space-y-6">
             <OrderbookDisplay
               upAsk={upAsk}
               downAsk={downAsk}
               upBid={upBid}
               downBid={downBid}
             />
-            <CycleInfo cycle={currentCycle} orderbooks={orderbooks} />
+            <CycleInfo cycle={currentCycle} />
           </div>
-        </div>
-
-        {/* Uptime */}
-        <div className="text-center text-muted text-sm">
-          Uptime: {currentStatus?.uptime ? formatDuration(currentStatus.uptime) : '—'}
         </div>
       </main>
     </div>
   );
 }
-

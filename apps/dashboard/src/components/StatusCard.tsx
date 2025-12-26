@@ -41,3 +41,4 @@ export function StatusCard({ title, value, subtitle, trend, icon, className }: S
   );
 }
 
+
