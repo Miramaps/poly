@@ -45,6 +45,7 @@ public:
     void subscribe(const std::string& token_id);
     void unsubscribe(const std::string& token_id);
     void clear_subscriptions();
+    void reconnect();
     void start();
     void stop();
     bool is_connected() const { return connected_.load(); }

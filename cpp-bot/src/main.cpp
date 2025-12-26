@@ -219,7 +219,9 @@ int main() {
                     std::cout << "[TOKENS] UP:   " << g_up_token.substr(0,24) << "..." << std::endl;
                     std::cout << "[TOKENS] DOWN: " << g_down_token.substr(0,24) << "..." << std::endl;
                     
-                    // Subscribe to new tokens (don't unsubscribe - causes disconnect)
+                    // Clear old subscriptions and reconnect for new market
+                    g_ws->clear_subscriptions();
+                    g_ws->reconnect();  // Force fresh connection
                     g_ws->subscribe(g_up_token);
                     g_ws->subscribe(g_down_token);
                     
