@@ -5,13 +5,13 @@ import { cn, formatPercent, formatCurrency } from '@/lib/utils';
 interface Cycle {
   id: string;
   status: string;
-  leg1Side?: string;
-  leg1Price?: number;
-  leg1Shares?: number;
+  leg1Side: string;
+  leg1Price: number;
+  leg1Shares: number;
   leg2Side?: string;
   leg2Price?: number;
   leg2Shares?: number;
-  totalCost?: number;
+  totalCost: number;
   lockedInPct?: number;
   lockedInProfit?: number;
 }
@@ -68,7 +68,7 @@ export function CycleInfo({ cycle, orderbooks, className }: CycleInfoProps) {
         )}
       </div>
       
-      {!cycle ? (
+      {!cycle || !cycle.active ? (
         <div className="relative text-muted text-center py-4 text-xs bg-white/[0.02] rounded-lg border border-white/5">
           No active cycle
         </div>

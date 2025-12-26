@@ -197,7 +197,7 @@ export default function DashboardPage() {
               upBid={upBid}
               downBid={downBid}
             />
-            <CycleInfo cycle={currentCycle} orderbooks={orderbooks} />
+            <CycleInfo cycle={currentStatus?.currentCycle} orderbooks={orderbooks} />
           </div>
         </div>
 

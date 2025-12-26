@@ -136,6 +136,20 @@ EngineStatus TradingEngine::get_status() const {
         status.recent_trades.push_back(trade_history_[i]);
     }
     
+    
+    // Populate current cycle
+    if (current_position_) {
+        status.current_cycle.active = true;
+        status.current_cycle.status = "leg1_done";
+        status.current_cycle.leg1_side = current_position_->side;
+        status.current_cycle.leg1_price = current_position_->avg_cost;
+        status.current_cycle.leg1_shares = current_position_->shares;
+        status.current_cycle.total_cost = current_position_->total_cost;
+    } else {
+        status.current_cycle.active = false;
+        status.current_cycle.status = "pending";
+    }
+
     return status;
 }
 

@@ -65,6 +65,19 @@ struct EngineStatus {
     Config config;
     int64_t uptime_seconds;
     std::vector<Trade> recent_trades;
+    struct CurrentCycle {
+        bool active = false;
+        std::string status; // pending, leg1_done, complete
+        std::string leg1_side;
+        double leg1_price = 0;
+        double leg1_shares = 0;
+        std::string leg2_side;
+        double leg2_price = 0;
+        double leg2_shares = 0;
+        double total_cost = 0;
+        double pnl = 0;
+    };
+    CurrentCycle current_cycle;
 };
 
 class AsyncTradeWriter;

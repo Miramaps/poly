@@ -220,6 +220,14 @@ std::string get_status_json() {
                 {"timeLeft", time_left},
                 {"inTradingWindow", in_trading}
             }},
+            {"currentCycle", {
+                {"active", g_engine_ptr ? (g_engine_ptr->get_status().current_cycle.active) : false},
+                {"status", g_engine_ptr ? g_engine_ptr->get_status().current_cycle.status : "pending"},
+                {"leg1Side", g_engine_ptr ? g_engine_ptr->get_status().current_cycle.leg1_side : ""},
+                {"leg1Price", g_engine_ptr ? g_engine_ptr->get_status().current_cycle.leg1_price : 0.0},
+                {"leg1Shares", g_engine_ptr ? g_engine_ptr->get_status().current_cycle.leg1_shares : 0.0},
+                {"totalCost", g_engine_ptr ? g_engine_ptr->get_status().current_cycle.total_cost : 0.0}
+            }},
             {"orderbooks", {
                 {"UP", {
                     {"bestBid", g_up_price > 0.01 ? g_up_price - 0.01 : 0},
