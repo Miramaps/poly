@@ -52,7 +52,7 @@ namespace {
     int64_t get_current_window_timestamp() {
         auto now = std::chrono::system_clock::now();
         auto now_sec = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
-        return (now_sec / 900) * 900;
+        return ((now_sec / 900) + 1) * 900;  // Use window END time for market slug
     }
     
     int get_seconds_into_window() {
