@@ -148,17 +148,23 @@ void WebSocketPriceStream::send_subscribe(const std::string& token_id) {
     if (!connected_ || !ws_) return;
     
     try {
-        // Subscribe using assets_ids array (Polymarket format)
+        // Subscribe to market channel (for orderbook/price updates)
         nlohmann::json market_sub = {
             {"type", "subscribe"},
             {"channel", "market"},
             {"assets_ids", {token_id}}
         };
+        ws_->write(net::buffer(market_sub.dump()));
         
-        std::string sub_msg = market_sub.dump();
-        ws_->write(net::buffer(sub_msg));
+        // Also subscribe to price channel
+        nlohmann::json price_sub = {
+            {"type", "subscribe"},
+            {"channel", "price"},
+            {"assets_ids", {token_id}}
+        };
+        ws_->write(net::buffer(price_sub.dump()));
         
-        std::cout << "[WS] Subscribed: " << sub_msg << std::endl;
+        std::cout << "[WS] Subscribed (market+price): " << token_id.substr(0, 16) << "..." << std::endl;
     } catch (const std::exception& e) {
         std::cerr << "[WS] Subscribe error: " << e.what() << std::endl;
     }
@@ -190,9 +196,9 @@ void WebSocketPriceStream::read_loop() {
             std::string msg = beast::buffers_to_string(buffer.data());
             msg_count++;
             
-            // DEBUG: Show first 10 messages to see what we're getting
-            if (msg_count <= 10) {
-                std::cout << "[WS MSG #" << msg_count << "] " << msg.substr(0, 150) << "..." << std::endl;
+            // Debug: log first few messages and then every 100th
+            if (msg_count <= 5 || msg_count % 100 == 0) {
+                std::cout << "[WS] MSG #" << msg_count << ": " << msg.substr(0, 200) << (msg.length() > 200 ? "..." : "") << std::endl;
             }
             
             try {

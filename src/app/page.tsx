@@ -81,25 +81,24 @@ export default function DashboardPage() {
   };
 
   const botConfig = currentStatus?.bot?.config;
+  const windowData = currentStatus?.window;
   const currentCycle = currentStatus?.currentCycle;
   const orderbooks = currentStatus?.orderbooks || { UP: null, DOWN: null };
 
-  // Build market object from currentMarket data
-  const marketData = currentStatus?.currentMarket;
-  const timeLeft = marketData?.timeLeft ?? 0;
-  const currentMarket = marketData ? {
-    slug: marketData.slug,
-    status: timeLeft > 0 ? 'live' : 'ended',
-    secondsLeft: timeLeft,
-    inTradingWindow: marketData.inTradingWindow,
-    title: marketData.title,
+  // Build market object with window timing - use secondsLeft directly
+  const windowSecondsLeft = windowData?.secondsLeft ?? 0;
+  const currentMarket = currentStatus?.currentMarket ? {
+    slug: currentStatus.currentMarket.slug,
+    status: windowSecondsLeft > 0 ? 'live' : 'ended',
+    secondsLeft: windowSecondsLeft,
+    startTime: windowData?.windowStart ? new Date(windowData.windowStart * 1000).toISOString() : undefined,
+    endTime: windowData?.windowEnd ? new Date(windowData.windowEnd * 1000).toISOString() : undefined,
   } : null;
 
-  // Orderbooks - API returns bestAsk/bestBid directly
-  const upAsk = orderbooks.UP?.bestAsk;
-  const downAsk = orderbooks.DOWN?.bestAsk;
-  const upBid = orderbooks.UP?.bestBid;
-  const downBid = orderbooks.DOWN?.bestBid;
+  const upAsk = orderbooks.UP?.asks?.[0]?.price;
+  const downAsk = orderbooks.DOWN?.asks?.[0]?.price;
+  const upBid = orderbooks.UP?.bids?.[0]?.price;
+  const downBid = orderbooks.DOWN?.bids?.[0]?.price;
 
   const pnlPct = ((portfolio.equity - 1000) / 1000) * 100;
 

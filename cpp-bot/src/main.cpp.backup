@@ -100,39 +100,26 @@ namespace {
         return false;
     }
     
-    // WebSocket price callback - use regular doubles instead of atomic
-    static int callback_count = 0;
+    // WebSocket price callback - ONLY for our BTC Up/Down tokens
     static double s_up_price = 0.0;
     static double s_down_price = 0.0;
     
     void on_price_update(const poly::PriceUpdate& update) {
         std::lock_guard<std::mutex> lock(g_price_mutex);
-        callback_count++;
         
-        bool matched = false;
         double price = update.price;
         
+        // ONLY update if it matches our tokens
         if (update.token_id == g_up_token) {
             s_up_price = price;
-            g_up_price.store(price);  // Update atomic for logging loop
-            matched = true;
+            set_live_prices(s_up_price, s_down_price);
+            std::cout << "[PRICE] UP: $" << s_up_price << " | DOWN: $" << s_down_price << std::endl;
         } else if (update.token_id == g_down_token) {
             s_down_price = price;
-            g_down_price.store(price);  // Update atomic for logging loop
-            matched = true;
+            set_live_prices(s_up_price, s_down_price);
+            std::cout << "[PRICE] UP: $" << s_up_price << " | DOWN: $" << s_down_price << std::endl;
         }
-        
-        // Update the API server with latest prices
-        set_live_prices(s_up_price, s_down_price);
-        
-        // Debug: log every 500th callback (less spam)
-        if (callback_count <= 5 || callback_count % 500 == 0) {
-            std::cout << "[PRICE CB #" << callback_count << "] " 
-                      << (matched ? "MATCHED" : "UNMATCHED") 
-                      << " p=" << price 
-                      << " UP=$" << s_up_price 
-                      << " DOWN=$" << s_down_price << std::endl;
-        }
+        // Ignore all other tokens
     }
 }
 

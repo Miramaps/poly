@@ -6,8 +6,8 @@ interface Market {
   slug: string;
   status: string;
   secondsLeft?: number;
-  inTradingWindow?: boolean;
-  title?: string;
+  startTime?: string;
+  endTime?: string;
 }
 
 interface MarketInfoProps {
@@ -27,13 +27,13 @@ export function MarketInfo({
   const secondsLeft = market?.secondsLeft ?? 0;
   const secondsElapsed = WINDOW_DURATION_SEC - secondsLeft;
   
-  // Determine trading phase - use API's inTradingWindow if available
-  const isInTradingWindow = market?.inTradingWindow ?? (secondsElapsed < TRADING_WINDOW_SEC && secondsLeft > 0);
-  const isWatching = !isInTradingWindow && secondsLeft > 0;
+  // Determine trading phase
+  const isInTradingWindow = secondsElapsed < TRADING_WINDOW_SEC && secondsLeft > 0;
+  const isWatching = secondsElapsed >= TRADING_WINDOW_SEC && secondsLeft > 0;
   const isEnded = secondsLeft <= 0;
   
   // Time in trading window
-  const tradingSecondsLeft = isInTradingWindow ? Math.max(0, TRADING_WINDOW_SEC - secondsElapsed) : 0;
+  const tradingSecondsLeft = Math.max(0, TRADING_WINDOW_SEC - secondsElapsed);
   
   // Progress bar percentage
   const progressPct = Math.min(100, (secondsElapsed / WINDOW_DURATION_SEC) * 100);
