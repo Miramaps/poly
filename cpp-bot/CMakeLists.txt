@@ -20,11 +20,13 @@ set(SOURCES
     src/main.cpp
     src/api/api_server.cpp
     src/database/database.cpp
+    src/database/async_writer.cpp
     src/engine/trading_engine.cpp
     src/engine/dump_detector.cpp
     src/engine/dca_manager.cpp
     src/network/polymarket_client.cpp
     src/network/websocket_client.cpp
+    src/network/ws_server.cpp
     src/utils/logger.cpp
 )
 

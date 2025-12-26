@@ -61,7 +61,7 @@ bool Database::insert_trade(const TradeRecord& trade) {
     if (!check_connection()) return false;
     
     std::ostringstream query;
-    query << "INSERT INTO trades (id, market_slug, leg, side, token_id, shares, price, cost, fee, timestamp) "
+    query << "INSERT INTO trades (id, market_slug, leg, side, token_id, shares, price, cost, fee, cash_after, ts) "
           << "VALUES ("
           << "'" << trade.id << "', "
           << "'" << trade.market_slug << "', "

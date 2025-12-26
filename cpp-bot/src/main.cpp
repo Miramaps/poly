@@ -1,4 +1,6 @@
 #include "trading_engine.hpp"
+#include "async_writer.hpp"
+#include "database.hpp"
 #include "database.hpp"
 #include "api_server.hpp"
 #include "polymarket_client.hpp"
@@ -187,6 +189,11 @@ int main() {
         poly::set_engine_ptr(&engine);  // Set global pointer for callback
         engine.start();
         std::cout << "[ENGINE] Started" << std::endl;
+        
+        // Start async trade writer for database persistence
+        poly::AsyncTradeWriter async_writer(db);
+        async_writer.start();
+        engine.set_async_writer(&async_writer);
         
         // Initialize WebSocket
         g_ws = std::make_unique<poly::WebSocketPriceStream>();
