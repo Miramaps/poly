@@ -93,8 +93,8 @@ void WebSocketPriceStream::run() {
         }
         
         if (running_) {
-            std::cout << "[WS] Reconnecting in 2s..." << std::endl;
-            std::this_thread::sleep_for(std::chrono::seconds(2));
+            std::cout << "[WS] Reconnecting in 100ms..." << std::endl;
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
 }

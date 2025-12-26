@@ -219,25 +219,9 @@ int main() {
                     std::cout << "[TOKENS] UP:   " << g_up_token.substr(0,24) << "..." << std::endl;
                     std::cout << "[TOKENS] DOWN: " << g_down_token.substr(0,24) << "..." << std::endl;
                     
-                    // Update WebSocket subscriptions (no clear, just unsubscribe old + subscribe new)
-                    static std::string prev_up_token;
-                    static std::string prev_down_token;
-                    
-                    // Unsubscribe old tokens (if different)
-                    if (!prev_up_token.empty() && prev_up_token != g_up_token) {
-                        g_ws->unsubscribe(prev_up_token);
-                    }
-                    if (!prev_down_token.empty() && prev_down_token != g_down_token) {
-                        g_ws->unsubscribe(prev_down_token);
-                    }
-                    
-                    // Subscribe to new tokens
+                    // Subscribe to new tokens (don't unsubscribe - causes disconnect)
                     g_ws->subscribe(g_up_token);
                     g_ws->subscribe(g_down_token);
-                    
-                    // Store for next switch
-                    prev_up_token = g_up_token;
-                    prev_down_token = g_down_token;
                     
                     // Reset prices for new market
                     s_up_price = 0.0;
