@@ -56,12 +56,12 @@ export function LogViewer({ logs, className }: LogViewerProps) {
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-xl border border-white/10 bg-[#0a0a0a] flex flex-col',
+        'relative overflow-hidden rounded-xl border border-white/10 bg-[#0c0c0c] bg-gradient-to-b from-[#0c0c0c] to-[#080808] flex flex-col',
         className
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/5 bg-white/[0.02]">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/5 bg-black/40">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           <span className="text-xs font-medium text-white/80">Live Logs</span>
