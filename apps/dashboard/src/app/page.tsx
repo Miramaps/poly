@@ -62,10 +62,11 @@ export default function DashboardPage() {
   const currentCycle = currentStatus?.currentCycle;
   const orderbooks = currentStatus?.orderbooks || { UP: null, DOWN: null };
 
-  const upAsk = orderbooks.UP?.asks?.[0]?.price;
-  const downAsk = orderbooks.DOWN?.asks?.[0]?.price;
-  const upBid = orderbooks.UP?.bids?.[0]?.price;
-  const downBid = orderbooks.DOWN?.bids?.[0]?.price;
+  // API returns { bestAsk, bestBid } format
+  const upAsk = orderbooks.UP?.bestAsk;
+  const downAsk = orderbooks.DOWN?.bestAsk;
+  const upBid = orderbooks.UP?.bestBid;
+  const downBid = orderbooks.DOWN?.bestBid;
 
   const pnlPct = ((portfolio.equity - 1000) / 1000) * 100;
 
