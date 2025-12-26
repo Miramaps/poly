@@ -359,5 +359,42 @@ double TradingEngine::get_best_ask(const OrderbookSnapshot& book) const {
     return book.asks[0].first;
 }
 
+// Config setters
+void TradingEngine::set_entry_threshold(double value) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    config_.move = value;
+    config_.entry_threshold = value;
+    std::cout << "[CONFIG] Entry threshold set to $" << std::fixed << std::setprecision(2) << value << std::endl;
+}
+
+void TradingEngine::set_shares(int value) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    config_.shares = value;
+    std::cout << "[CONFIG] Shares set to " << value << std::endl;
+}
+
+void TradingEngine::set_sum_target(double value) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    config_.sum_target = value;
+    std::cout << "[CONFIG] Sum target set to $" << std::fixed << std::setprecision(2) << value << std::endl;
+}
+
+void TradingEngine::set_dca_enabled(bool value) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    config_.dca_enabled = value;
+    std::cout << "[CONFIG] DCA " << (value ? "ENABLED" : "DISABLED") << std::endl;
+}
+
+void TradingEngine::set_trading_window(int seconds) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    config_.dump_window_sec = seconds;
+    std::cout << "[CONFIG] Trading window set to " << seconds << "s" << std::endl;
+}
+
+Config TradingEngine::get_config() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return config_;
+}
+
 } // namespace poly
 

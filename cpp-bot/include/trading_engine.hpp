@@ -31,16 +31,16 @@ struct Trade {
 };
 
 struct Config {
-    double entry_threshold = 0.35;
+    double entry_threshold = 0.36;
     int shares = 10;
     bool dca_enabled = true;
     std::vector<double> dca_levels = {0.30, 0.25, 0.20, 0.15};
     double dca_multiplier = 1.5;
     double sum_target = 0.99;
     bool breakeven_enabled = true;
-    double move = 0.36;  // Updated threshold
+    double move = 0.36;  // Entry threshold
     int window_min = 15;
-    int dump_window_sec = 3;
+    int dump_window_sec = 120;  // Trading window seconds (first 2 minutes)
 };
 
 struct EngineStatus {
@@ -97,6 +97,16 @@ public:
         double shares,
         double price
     );
+    
+    // Update config values dynamically
+    void set_entry_threshold(double value);
+    void set_shares(int value);
+    void set_sum_target(double value);
+    void set_dca_enabled(bool value);
+    void set_trading_window(int seconds);
+    
+    // Get current config
+    Config get_config() const;
 
 private:
     Config config_;

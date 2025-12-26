@@ -25,6 +25,11 @@ static std::string g_market_slug;
 static std::string g_market_question;
 
 static std::atomic<bool> g_auto_enabled{false};
+static TradingEngine* g_engine_ptr = nullptr;
+
+void set_engine_ptr(TradingEngine* engine) {
+    g_engine_ptr = engine;
+}
 
 void add_log(const std::string& level, const std::string& name, const std::string& message) {
     std::lock_guard<std::mutex> lock(g_log_mutex);
@@ -215,49 +220,170 @@ std::string get_logs_json() {
 std::string process_command(const std::string& cmd) {
     if (cmd == "help") {
         add_log("info", "CMD", "help - showing commands");
-        return "=== POLY TRADER C++ COMMANDS ===\n"
-               "help     - Show commands\n"
-               "status   - Bot status\n"
-               "config   - Show config\n"
-               "auto on  - Enable trading\n"
-               "auto off - Disable trading";
+        return "=== POLY TRADER C++ COMMANDS ===\n\n"
+               "STATUS:\n"
+               "  help          - Show this help\n"
+               "  status        - Bot status & prices\n"
+               "  config        - Show current config\n\n"
+               "TRADING:\n"
+               "  auto on       - Enable auto trading\n"
+               "  auto off      - Disable auto trading\n\n"
+               "CONFIG CHANGES:\n"
+               "  set entry <$> - Set entry threshold (e.g. 'set entry 0.36')\n"
+               "  set shares <n>- Set shares per trade (e.g. 'set shares 10')\n"
+               "  set sum <$>   - Set sum target (e.g. 'set sum 0.99')\n"
+               "  set dca on    - Enable DCA\n"
+               "  set dca off   - Disable DCA\n"
+               "  set window <s>- Set trading window seconds (e.g. 'set window 120')";
     }
     else if (cmd == "status") {
         add_log("info", "CMD", "status - showing bot status");
         std::lock_guard<std::mutex> lock(g_price_mutex);
         std::ostringstream oss;
+        
+        double cash = 1000.0;
+        double realized_pnl = 0.0;
+        if (g_engine_ptr) {
+            auto status = g_engine_ptr->get_status();
+            cash = status.cash;
+            realized_pnl = status.realized_pnl;
+        }
+        
         oss << "=== BOT STATUS ===\n"
             << "Mode: PAPER TRADING\n"
             << "Auto: " << (g_auto_enabled.load() ? "ON" : "OFF") << "\n"
             << "Market: " << g_market_slug << "\n"
-            << "UP: $" << std::fixed << std::setprecision(2) << g_up_price << "\n"
-            << "DOWN: $" << g_down_price << "\n"
-            << "Cash: $1000.00";
+            << "UP: $" << std::fixed << std::setprecision(4) << g_up_price << "\n"
+            << "DOWN: $" << std::fixed << std::setprecision(4) << g_down_price << "\n"
+            << "Sum: $" << std::fixed << std::setprecision(4) << (g_up_price + g_down_price) << "\n"
+            << "Cash: $" << std::fixed << std::setprecision(2) << cash << "\n"
+            << "Realized P&L: $" << std::fixed << std::setprecision(2) << realized_pnl;
         return oss.str();
     }
     else if (cmd == "config") {
         add_log("info", "CMD", "config - showing configuration");
-        return "=== CONFIG ===\n"
-               "Entry Threshold: $0.36\n"
-               "Shares: 10\n"
-               "Sum Target: $0.99\n"
-               "DCA: ON\n"
-               "Breakeven Exit: ON\n"
-               "Trading Window: 120s";
+        std::ostringstream oss;
+        
+        if (g_engine_ptr) {
+            auto cfg = g_engine_ptr->get_config();
+            oss << "=== CONFIG ===\n"
+                << "Entry Threshold: $" << std::fixed << std::setprecision(2) << cfg.move << "\n"
+                << "Shares: " << cfg.shares << "\n"
+                << "Sum Target: $" << std::fixed << std::setprecision(2) << cfg.sum_target << "\n"
+                << "DCA: " << (cfg.dca_enabled ? "ON" : "OFF") << "\n"
+                << "Breakeven Exit: " << (cfg.breakeven_enabled ? "ON" : "OFF") << "\n"
+                << "Trading Window: " << cfg.dump_window_sec << "s";
+        } else {
+            oss << "=== CONFIG ===\n"
+                << "Entry Threshold: $0.36\n"
+                << "Shares: 10\n"
+                << "Sum Target: $0.99\n"
+                << "DCA: ON\n"
+                << "Breakeven Exit: ON\n"
+                << "Trading Window: 120s";
+        }
+        return oss.str();
     }
     else if (cmd == "auto on") {
         g_auto_enabled = true;
+        if (g_engine_ptr) g_engine_ptr->start();
         add_log("info", "CMD", "Auto trading ENABLED");
-        return "Auto trading ENABLED";
+        return "✅ Auto trading ENABLED - Bot is now actively trading";
     }
     else if (cmd == "auto off") {
         g_auto_enabled = false;
+        if (g_engine_ptr) g_engine_ptr->stop();
         add_log("info", "CMD", "Auto trading DISABLED");
-        return "Auto trading DISABLED";
+        return "⏹️ Auto trading DISABLED - Bot is paused";
+    }
+    // Handle 'set entry X' command
+    else if (cmd.rfind("set entry ", 0) == 0) {
+        try {
+            double val = std::stod(cmd.substr(10));
+            if (val > 0 && val < 1.0) {
+                if (g_engine_ptr) {
+                    g_engine_ptr->set_entry_threshold(val);
+                    add_log("info", "CMD", "Entry threshold set to $" + std::to_string(val));
+                    return "✅ Entry threshold set to $" + std::to_string(val).substr(0, 4);
+                }
+                return "❌ Engine not available";
+            }
+            return "❌ Invalid value. Entry must be between 0 and 1 (e.g. 0.36)";
+        } catch (...) {
+            return "❌ Invalid number. Usage: set entry 0.36";
+        }
+    }
+    // Handle 'set shares X' command
+    else if (cmd.rfind("set shares ", 0) == 0) {
+        try {
+            int val = std::stoi(cmd.substr(11));
+            if (val > 0 && val <= 10000) {
+                if (g_engine_ptr) {
+                    g_engine_ptr->set_shares(val);
+                    add_log("info", "CMD", "Shares set to " + std::to_string(val));
+                    return "✅ Shares set to " + std::to_string(val);
+                }
+                return "❌ Engine not available";
+            }
+            return "❌ Invalid value. Shares must be between 1 and 10000";
+        } catch (...) {
+            return "❌ Invalid number. Usage: set shares 10";
+        }
+    }
+    // Handle 'set sum X' command
+    else if (cmd.rfind("set sum ", 0) == 0) {
+        try {
+            double val = std::stod(cmd.substr(8));
+            if (val > 0.5 && val <= 1.0) {
+                if (g_engine_ptr) {
+                    g_engine_ptr->set_sum_target(val);
+                    add_log("info", "CMD", "Sum target set to $" + std::to_string(val));
+                    return "✅ Sum target set to $" + std::to_string(val).substr(0, 4);
+                }
+                return "❌ Engine not available";
+            }
+            return "❌ Invalid value. Sum target must be between 0.5 and 1.0 (e.g. 0.99)";
+        } catch (...) {
+            return "❌ Invalid number. Usage: set sum 0.99";
+        }
+    }
+    // Handle 'set dca on/off' command
+    else if (cmd == "set dca on") {
+        if (g_engine_ptr) {
+            g_engine_ptr->set_dca_enabled(true);
+            add_log("info", "CMD", "DCA enabled");
+            return "✅ DCA ENABLED - Will buy more at lower prices";
+        }
+        return "❌ Engine not available";
+    }
+    else if (cmd == "set dca off") {
+        if (g_engine_ptr) {
+            g_engine_ptr->set_dca_enabled(false);
+            add_log("info", "CMD", "DCA disabled");
+            return "⏹️ DCA DISABLED - Only initial entry trades";
+        }
+        return "❌ Engine not available";
+    }
+    // Handle 'set window X' command
+    else if (cmd.rfind("set window ", 0) == 0) {
+        try {
+            int val = std::stoi(cmd.substr(11));
+            if (val >= 10 && val <= 900) {
+                if (g_engine_ptr) {
+                    g_engine_ptr->set_trading_window(val);
+                    add_log("info", "CMD", "Trading window set to " + std::to_string(val) + "s");
+                    return "✅ Trading window set to " + std::to_string(val) + " seconds";
+                }
+                return "❌ Engine not available";
+            }
+            return "❌ Invalid value. Window must be between 10 and 900 seconds";
+        } catch (...) {
+            return "❌ Invalid number. Usage: set window 120";
+        }
     }
     
     add_log("warn", "CMD", "Unknown command: " + cmd);
-    return "Unknown command. Type 'help' for available commands.";
+    return "❌ Unknown command. Type 'help' for available commands.";
 }
 
 void APIServer::run() {

@@ -32,5 +32,6 @@ private:
 void add_log(const std::string& level, const std::string& name, const std::string& message);
 void set_live_prices(double up_price, double down_price);
 void set_market_info(const std::string& slug, const std::string& question);
+void set_engine_ptr(TradingEngine* engine);
 
 } // namespace poly

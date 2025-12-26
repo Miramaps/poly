@@ -18,6 +18,7 @@
 using poly::add_log;
 using poly::set_live_prices;
 using poly::set_market_info;
+using poly::set_engine_ptr;
 
 namespace {
     std::unique_ptr<poly::APIServer> g_server;
@@ -30,6 +31,9 @@ namespace {
     std::atomic<double> g_up_price{0.0};
     std::atomic<double> g_down_price{0.0};
     std::mutex g_price_mutex;
+    
+    // Engine pointer for price callback to feed trading engine
+    poly::TradingEngine* g_engine = nullptr;
     
     // CURL handle for market info (only needed occasionally)
     CURL* g_curl_market = nullptr;
@@ -125,6 +129,27 @@ namespace {
         // Update the API server with latest prices
         set_live_prices(s_up_price, s_down_price);
         
+        // Feed prices to trading engine for execution
+        if (matched && g_engine && s_up_price > 0 && s_down_price > 0) {
+            // Create orderbook snapshots from current prices
+            poly::OrderbookSnapshot up_book;
+            up_book.asks.push_back({s_up_price, 10000.0});  // price, size
+            up_book.bids.push_back({std::max(0.01, s_up_price - 0.01), 10000.0});
+            up_book.timestamp = std::chrono::system_clock::now();
+            
+            poly::OrderbookSnapshot down_book;
+            down_book.asks.push_back({s_down_price, 10000.0});
+            down_book.bids.push_back({std::max(0.01, s_down_price - 0.01), 10000.0});
+            down_book.timestamp = std::chrono::system_clock::now();
+            
+            // Feed to engine - only feed if in trading window (first 2 minutes)
+            int secs_into_window = get_seconds_into_window();
+            if (secs_into_window <= 120) {  // Trading window
+                g_engine->on_orderbook_update(g_up_token, up_book);
+                g_engine->on_orderbook_update(g_down_token, down_book);
+            }
+        }
+        
         // Debug: log every 500th callback (less spam)
         if (callback_count <= 5 || callback_count % 500 == 0) {
             std::cout << "[PRICE CB #" << callback_count << "] " 
@@ -172,6 +197,8 @@ int main() {
         
         poly::TradingEngine engine(config);
         engine.start();
+        set_engine_ptr(&engine);  // Allow API server commands to modify engine config
+        g_engine = &engine;       // Allow price callback to feed trading engine
         std::cout << "[ENGINE] Started" << std::endl;
         
         // Initialize WebSocket
