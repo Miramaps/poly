@@ -77,17 +77,31 @@ void WebSocketPriceStream::stop() {
 }
 
 void WebSocketPriceStream::reconnect() {
-    // Close existing connection if any
-    if (ws_ && connected_) {
-        try {
-            beast::get_lowest_layer(*ws_).cancel();
-            ws_.reset();
-        } catch (...) {}
-    }
+    std::cout << "[WS] Reconnect requested" << std::endl;
+    
+    // Set connected to false first to break read_loop
     connected_ = false;
     
-    // The run loop will automatically reconnect
-    std::cout << "[WS] Reconnect requested" << std::endl;
+    // Close existing connection if any
+    if (ws_) {
+        try {
+            // Close the websocket gracefully first
+            beast::error_code ec;
+            ws_->close(websocket::close_code::normal, ec);
+        } catch (...) {}
+        
+        try {
+            // Then cancel any pending operations
+            beast::get_lowest_layer(*ws_).cancel();
+        } catch (...) {}
+        
+        try {
+            // Close the underlying socket
+            beast::get_lowest_layer(*ws_).close();
+        } catch (...) {}
+    }
+    
+    // The run loop will automatically reconnect after read_loop exits
 }
 
 void WebSocketPriceStream::run() {
