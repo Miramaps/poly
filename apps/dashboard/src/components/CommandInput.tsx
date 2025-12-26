@@ -34,13 +34,11 @@ export function CommandInput({ className }: CommandInputProps) {
 
     try {
       const result = await sendCommand(command);
-      // API returns { success: true, data: "response text" }
-      const responseText = result.data || result.message || 'Command executed';
       setResponses((prev) => [
         ...prev,
         { 
           command, 
-          response: typeof responseText === 'string' ? responseText : JSON.stringify(responseText, null, 2),
+          response: result.message || JSON.stringify(result, null, 2),
           success: result.success !== false
         },
       ]);
@@ -55,7 +53,6 @@ export function CommandInput({ className }: CommandInputProps) {
       ]);
     } finally {
       setIsLoading(false);
-      // Scroll to bottom
       setTimeout(() => {
         if (scrollRef.current) {
           scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -94,20 +91,27 @@ export function CommandInput({ className }: CommandInputProps) {
   return (
     <div
       className={cn(
-        'bg-card border border-border rounded-lg overflow-hidden shadow-card flex flex-col',
+        'relative overflow-hidden rounded-xl border border-border bg-gradient-to-br from-[#0d0d0d] via-[#111111] to-[#0a0a0a] flex flex-col',
         className
       )}
     >
+      {/* Background decoration */}
+      <div className="absolute bottom-0 right-0 w-32 h-32 bg-accent/5 rounded-full blur-3xl translate-y-1/2 translate-x-1/2" />
+      
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-black/30">
+      <div className="relative flex items-center justify-between px-3 py-2 border-b border-white/5 bg-black/20">
         <div className="flex items-center gap-2">
-          <span className="text-lg">⌨️</span>
-          <span className="text-muted text-sm font-mono">Command Terminal</span>
+          <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-accent/20 to-accent/5 border border-accent/20 flex items-center justify-center">
+            <svg className="w-3 h-3 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <span className="text-xs font-medium text-white">Command Terminal</span>
         </div>
         {responses.length > 0 && (
           <button
             onClick={clearResponses}
-            className="text-xs text-muted hover:text-white px-2 py-1 rounded hover:bg-white/5"
+            className="text-[10px] text-muted hover:text-white px-2 py-0.5 rounded hover:bg-white/5 transition-colors"
           >
             Clear
           </button>
@@ -117,22 +121,22 @@ export function CommandInput({ className }: CommandInputProps) {
       {/* Command history/responses */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto p-4 font-mono text-sm space-y-3"
+        className="relative flex-1 overflow-y-auto p-3 font-mono text-xs space-y-2"
       >
         {responses.length === 0 ? (
-          <div className="text-muted text-center py-4 text-xs">
-            Type a command below. Try <span className="text-accent">'help'</span> to see available commands.
+          <div className="text-muted text-center py-4 text-[10px]">
+            Type a command below. Try <span className="text-accent">'help'</span> for available commands.
           </div>
         ) : (
           responses.slice(-10).map((r, i) => (
             <div key={`resp-${i}`} className="space-y-1">
-              <div className="text-accent flex items-center gap-2">
-                <span className="text-muted">$</span> 
-                <span>{r.command}</span>
+              <div className="text-accent flex items-center gap-1.5">
+                <span className="text-muted text-[10px]">$</span> 
+                <span className="text-[11px]">{r.command}</span>
               </div>
               <pre className={cn(
-                'text-xs whitespace-pre-wrap pl-3 border-l-2',
-                r.success ? 'border-accent/30 text-foreground/80' : 'border-red-500/30 text-red-400'
+                'text-[10px] whitespace-pre-wrap pl-2 border-l-2',
+                r.success ? 'border-accent/30 text-foreground/70' : 'border-danger/30 text-danger/80'
               )}>
                 {r.response}
               </pre>
@@ -142,31 +146,32 @@ export function CommandInput({ className }: CommandInputProps) {
       </div>
 
       {/* Input */}
-      <div className="border-t border-border p-4 bg-black/30">
-        <div className="flex items-center gap-3">
-          <span className="text-accent font-mono text-lg">&gt;</span>
-          <div className="flex-1 flex items-center bg-black/40 rounded-lg px-4 py-3 border border-border/50 focus-within:border-accent/50 transition-colors">
-            <span className="text-accent font-mono mr-2">poly&gt;</span>
+      <div className="relative border-t border-white/5 p-3 bg-black/20">
+        <div className="flex items-center gap-2">
+          <div className="flex-1 flex items-center bg-white/[0.02] rounded-lg px-3 py-2 border border-white/5 focus-within:border-accent/30 transition-colors">
+            <span className="text-accent font-mono text-xs mr-2">poly&gt;</span>
             <input
               ref={inputRef}
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={isLoading ? 'Executing...' : "Enter command... (try 'help')"}
+              placeholder={isLoading ? 'Executing...' : "Enter command..."}
               disabled={isLoading}
-              className="flex-1 bg-transparent border-none outline-none font-mono text-base text-foreground placeholder:text-muted/50 disabled:opacity-50"
+              className="flex-1 bg-transparent border-none outline-none font-mono text-xs text-foreground placeholder:text-muted/50 disabled:opacity-50"
               autoFocus
             />
           </div>
           {isLoading ? (
-            <span className="text-muted animate-pulse text-xl">⏳</span>
+            <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
+              <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+            </div>
           ) : (
             <button
               onClick={handleSubmit}
-              className="px-4 py-2 bg-accent/20 hover:bg-accent/30 text-accent rounded-lg font-mono text-sm transition-colors"
+              className="px-3 py-2 bg-gradient-to-br from-accent/20 to-accent/5 hover:from-accent/30 hover:to-accent/10 text-accent border border-accent/20 rounded-lg font-mono text-[10px] font-bold transition-all"
             >
-              Run
+              RUN
             </button>
           )}
         </div>
@@ -174,4 +179,3 @@ export function CommandInput({ className }: CommandInputProps) {
     </div>
   );
 }
-

@@ -1,87 +1,101 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useRef, useEffect } from 'react';
+import { cn } from '@/lib/utils';
 
 interface LogEntry {
-  timestamp: string;
+  timestamp: Date | string;
   level: string;
+  name: string;
   message: string;
 }
 
 interface LogViewerProps {
   logs: LogEntry[];
+  className?: string;
 }
 
-export function LogViewer({ logs }: LogViewerProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+export function LogViewer({ logs, className }: LogViewerProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [logs]);
 
-  const getLevelColor = (level: string) => {
-    switch (level?.toLowerCase()) {
-      case 'error': return 'text-red-400';
-      case 'warn': return 'text-yellow-400';
-      case 'info': return 'text-emerald-400';
-      default: return 'text-gray-400';
+  const formatTime = (ts: Date | string | number | undefined) => {
+    if (!ts) return '--:--:--';
+    try {
+      const d = ts instanceof Date ? ts : new Date(ts);
+      if (isNaN(d.getTime())) return '--:--:--';
+      return d.toLocaleTimeString('en-US', { hour12: false });
+    } catch {
+      return '--:--:--';
     }
   };
 
-  const formatTime = (timestamp: string) => {
-    try {
-      const date = new Date(timestamp);
-      return date.toLocaleTimeString('en-US', { hour12: false });
-    } catch {
-      return timestamp;
+  const getLevelClass = (level: string) => {
+    switch (level.toLowerCase()) {
+      case 'error':
+        return 'text-danger';
+      case 'warn':
+        return 'text-warning';
+      case 'trade':
+        return 'text-accent font-bold';
+      case 'signal':
+        return 'text-cyan-400';
+      case 'market':
+        return 'text-blue-400';
+      case 'info':
+        return 'text-muted';
+      default:
+        return 'text-muted';
     }
   };
 
   return (
-    <div className="relative rounded-xl overflow-hidden"
-      style={{
-        background: 'linear-gradient(145deg, rgba(20,20,25,0.95) 0%, rgba(10,10,15,0.98) 100%)',
-        boxShadow: '0 0 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)',
-        border: '1px solid rgba(255,255,255,0.08)',
-      }}>
+    <div
+      className={cn(
+        'relative overflow-hidden rounded-xl border border-border bg-gradient-to-br from-[#0d0d0d] via-[#111111] to-[#0a0a0a] flex flex-col',
+        className
+      )}
+    >
+      {/* Background decoration */}
+      <div className="absolute top-0 left-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl -translate-y-1/2 -translate-x-1/2" />
       
-      {/* Subtle glow accent */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-px bg-gradient-to-r from-transparent via-emerald-500/30 to-transparent" />
-      
-      <div className="p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-medium text-white/90 flex items-center gap-2">
-            <span className="text-emerald-400">📊</span> Live Logs
-            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-          </h3>
-          <span className="text-xs text-white/40">{logs.length} entries</span>
+      {/* Header */}
+      <div className="relative flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-black/20">
+        <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-500/5 border border-blue-500/20 flex items-center justify-center">
+          <svg className="w-3 h-3 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
         </div>
-        
-        {/* Fixed height container with internal scroll */}
-        <div 
-          ref={containerRef}
-          className="h-48 overflow-y-auto space-y-1 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent"
-          style={{ scrollBehavior: 'smooth' }}
-        >
-          {logs.length === 0 ? (
-            <div className="text-white/40 text-sm text-center py-8">
-              Waiting for logs...
+        <span className="text-xs font-medium text-white">Live Logs</span>
+        <div className="ml-auto flex items-center gap-1.5">
+          <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+          <span className="text-[10px] text-muted">{logs.length} entries</span>
+        </div>
+      </div>
+
+      {/* Log output */}
+      <div
+        ref={scrollRef}
+        className="relative flex-1 overflow-y-auto p-3 font-mono text-[10px] space-y-0.5"
+      >
+        {logs.length === 0 ? (
+          <div className="text-muted text-center py-6 text-xs">Waiting for logs...</div>
+        ) : (
+          logs.slice(-100).map((log, i) => (
+            <div key={`log-${i}`} className="flex gap-2 opacity-80 hover:opacity-100 transition-opacity">
+              <span className="text-muted/60 shrink-0">[{formatTime(log.timestamp)}]</span>
+              <span className={cn('shrink-0 uppercase w-10', getLevelClass(log.level))}>
+                {log.level?.slice(0, 5) || 'LOG'}
+              </span>
+              <span className="text-foreground/90 break-all">{log.message}</span>
             </div>
-          ) : (
-            logs.slice(-50).map((log, i) => (
-              <div 
-                key={i} 
-                className="flex items-start gap-2 text-xs font-mono py-1 px-2 rounded hover:bg-white/5 transition-colors"
-              >
-                <span className="text-white/30 shrink-0">[{formatTime(log.timestamp)}]</span>
-                <span className={`shrink-0 ${getLevelColor(log.level)}`}>{log.level}</span>
-                <span className="text-white/70 break-all">{log.message}</span>
-              </div>
-            ))
-          )}
-        </div>
+          ))
+        )}
       </div>
     </div>
   );

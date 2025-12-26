@@ -1,13 +1,13 @@
 #include "websocket_client.hpp"
 #include <iostream>
 #include <sstream>
+#include <iomanip>
 
 namespace poly {
 
 WebSocketPriceStream::WebSocketPriceStream() {
-    // Load SSL certificates
     ctx_.set_default_verify_paths();
-    ctx_.set_verify_mode(ssl::verify_none); // For simplicity
+    ctx_.set_verify_mode(ssl::verify_none);
 }
 
 WebSocketPriceStream::~WebSocketPriceStream() {
@@ -20,6 +20,9 @@ void WebSocketPriceStream::set_callback(PriceCallback cb) {
 
 void WebSocketPriceStream::subscribe(const std::string& token_id) {
     std::lock_guard<std::mutex> lock(mutex_);
+    for (const auto& t : subscribed_tokens_) {
+        if (t == token_id) return;
+    }
     subscribed_tokens_.push_back(token_id);
     if (connected_) {
         send_subscribe(token_id);
@@ -28,10 +31,24 @@ void WebSocketPriceStream::subscribe(const std::string& token_id) {
 
 void WebSocketPriceStream::unsubscribe(const std::string& token_id) {
     std::lock_guard<std::mutex> lock(mutex_);
-    subscribed_tokens_.erase(
-        std::remove(subscribed_tokens_.begin(), subscribed_tokens_.end(), token_id),
-        subscribed_tokens_.end()
-    );
+    auto it = std::find(subscribed_tokens_.begin(), subscribed_tokens_.end(), token_id);
+    if (it != subscribed_tokens_.end()) {
+        subscribed_tokens_.erase(it);
+    }
+}
+
+void WebSocketPriceStream::clear_subscriptions() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    subscribed_tokens_.clear();
+}
+
+void WebSocketPriceStream::reconnect() {
+    if (ws_ && connected_) {
+        try {
+            ws_->close(websocket::close_code::normal);
+        } catch (...) {}
+    }
+    connected_ = false;
 }
 
 void WebSocketPriceStream::start() {
@@ -43,28 +60,30 @@ void WebSocketPriceStream::stop() {
     running_ = false;
     if (ws_ && connected_) {
         try {
-            ws_->close(websocket::close_code::normal);
+            beast::get_lowest_layer(*ws_).cancel();
         } catch (...) {}
     }
     if (worker_thread_.joinable()) {
         worker_thread_.join();
     }
+    connected_ = false;
 }
 
 void WebSocketPriceStream::run() {
     while (running_) {
         try {
+            ioc_.restart();
             connect();
             if (connected_) {
+                std::cout << "[WS] ✓ Connected to Polymarket" << std::endl;
                 read_loop();
             }
         } catch (const std::exception& e) {
             std::cerr << "[WS] Error: " << e.what() << std::endl;
             connected_ = false;
         }
-        
         if (running_) {
-            std::this_thread::sleep_for(std::chrono::seconds(2));
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
 }
@@ -79,7 +98,6 @@ void WebSocketPriceStream::connect() {
     
     ws_ = std::make_unique<websocket::stream<beast::ssl_stream<tcp::socket>>>(ioc_, ctx_);
     
-    // Set SNI hostname
     if (!SSL_set_tlsext_host_name(ws_->next_layer().native_handle(), host.c_str())) {
         throw beast::system_error(
             beast::error_code(static_cast<int>(::ERR_get_error()), net::error::get_ssl_category()),
@@ -87,27 +105,21 @@ void WebSocketPriceStream::connect() {
         );
     }
     
-    // Connect
     auto ep = net::connect(beast::get_lowest_layer(*ws_), results);
-    
-    // SSL handshake
     ws_->next_layer().handshake(ssl::stream_base::client);
     
-    // Set a decorator to change the User-Agent
+    ws_->set_option(websocket::stream_base::timeout::suggested(beast::role_type::client));
     ws_->set_option(websocket::stream_base::decorator(
         [](websocket::request_type& req) {
             req.set(http::field::user_agent, "PolyTrader/1.0");
         }
     ));
     
-    // WebSocket handshake
     std::string ws_host = host + ":" + std::to_string(ep.port());
     ws_->handshake(ws_host, target);
     
     connected_ = true;
-    std::cout << "[WS] Connected to Polymarket price stream" << std::endl;
     
-    // Subscribe to all tokens
     std::lock_guard<std::mutex> lock(mutex_);
     for (const auto& token : subscribed_tokens_) {
         send_subscribe(token);
@@ -116,23 +128,24 @@ void WebSocketPriceStream::connect() {
 
 void WebSocketPriceStream::send_subscribe(const std::string& token_id) {
     if (!connected_ || !ws_) return;
-    
-    nlohmann::json sub_msg = {
-        {"type", "subscribe"},
-        {"channel", "price"},
-        {"assets_ids", {token_id}}
-    };
-    
     try {
-        ws_->write(net::buffer(sub_msg.dump()));
-        std::cout << "[WS] Subscribed to " << token_id.substr(0, 20) << "..." << std::endl;
+        nlohmann::json sub = {
+            {"type", "subscribe"},
+            {"channel", "market"},
+            {"assets_ids", {token_id}}
+        };
+        ws_->write(net::buffer(sub.dump()));
+        std::cout << "[WS] Subscribed: " << token_id.substr(0,20) << "..." << std::endl;
     } catch (const std::exception& e) {
         std::cerr << "[WS] Subscribe error: " << e.what() << std::endl;
     }
 }
 
+void WebSocketPriceStream::send_unsubscribe(const std::string&) {}
+
 void WebSocketPriceStream::read_loop() {
     beast::flat_buffer buffer;
+    int msg_count = 0;
     
     while (running_ && connected_) {
         try {
@@ -140,32 +153,48 @@ void WebSocketPriceStream::read_loop() {
             ws_->read(buffer);
             
             std::string msg = beast::buffers_to_string(buffer.data());
+            msg_count++;
+            
+            if (msg_count <= 5) {
+                std::cout << "[WS MSG #" << msg_count << "] " << msg.substr(0, 100) << "..." << std::endl;
+            }
             
             try {
                 auto j = nlohmann::json::parse(msg);
                 
-                // Handle price updates
-                if (j.contains("asset_id") && j.contains("price")) {
-                    std::string token_id = j["asset_id"];
-                    double price = 0.0;
-                    
-                    if (j["price"].is_string()) {
-                        price = std::stod(j["price"].get<std::string>());
-                    } else {
-                        price = j["price"].get<double>();
-                    }
-                    
-                    if (callback_) {
-                        callback_(token_id, price);
+                if (j.contains("price_changes") && j["price_changes"].is_array()) {
+                    for (const auto& change : j["price_changes"]) {
+                        PriceUpdate update;
+                        update.token_id = change.value("asset_id", "");
+                        if (change.contains("price")) {
+                            if (change["price"].is_string()) {
+                                update.price = std::stod(change["price"].get<std::string>());
+                            } else {
+                                update.price = change["price"].get<double>();
+                            }
+                        }
+                        if (!update.token_id.empty() && update.price > 0 && callback_) {
+                            callback_(update);
+                        }
                     }
                 }
-            } catch (...) {
-                // Ignore parse errors for non-price messages
-            }
+                else if (j.contains("asset_id") && j.contains("price")) {
+                    PriceUpdate update;
+                    update.token_id = j["asset_id"];
+                    if (j["price"].is_string()) {
+                        update.price = std::stod(j["price"].get<std::string>());
+                    } else {
+                        update.price = j["price"].get<double>();
+                    }
+                    if (callback_) {
+                        callback_(update);
+                    }
+                }
+            } catch (...) {}
             
         } catch (const beast::system_error& e) {
             if (e.code() != websocket::error::closed) {
-                throw;
+                std::cerr << "[WS] Read error: " << e.what() << std::endl;
             }
             break;
         }

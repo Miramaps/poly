@@ -89,4 +89,3 @@ export function EquityChart({ data, initialBankroll = 1000 }: EquityChartProps) 
   );
 }
 
-

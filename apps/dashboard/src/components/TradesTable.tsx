@@ -125,4 +125,3 @@ export function TradesTable({ trades, className }: TradesTableProps) {
     </div>
   );
 }
-
