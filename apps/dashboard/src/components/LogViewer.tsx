@@ -35,66 +35,82 @@ export function LogViewer({ logs, className }: LogViewerProps) {
     }
   };
 
-  const getLevelClass = (level: string) => {
-    switch (level.toLowerCase()) {
+  const getLogStyle = (level: string) => {
+    const l = level?.toLowerCase() || 'info';
+    switch (l) {
       case 'error':
-        return 'text-danger';
+        return { icon: '✕', bg: 'bg-red-500/5', border: 'border-l-red-500/50', text: 'text-red-400' };
       case 'warn':
-        return 'text-warning';
+        return { icon: '!', bg: 'bg-yellow-500/5', border: 'border-l-yellow-500/40', text: 'text-yellow-400' };
       case 'trade':
-        return 'text-accent font-bold';
+        return { icon: '◆', bg: 'bg-emerald-500/5', border: 'border-l-emerald-500/50', text: 'text-emerald-400' };
       case 'signal':
-        return 'text-cyan-400';
+        return { icon: '◎', bg: 'bg-cyan-500/5', border: 'border-l-cyan-500/40', text: 'text-cyan-400' };
       case 'market':
-        return 'text-blue-400';
-      case 'info':
-        return 'text-muted';
+        return { icon: '●', bg: 'bg-blue-500/5', border: 'border-l-blue-500/40', text: 'text-blue-400' };
       default:
-        return 'text-muted';
+        return { icon: '·', bg: '', border: 'border-l-white/10', text: 'text-white/50' };
     }
   };
 
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-xl border border-border bg-gradient-to-br from-[#0d0d0d] via-[#111111] to-[#0a0a0a] flex flex-col',
+        'relative overflow-hidden rounded-xl border border-white/10 bg-[#0a0a0a] flex flex-col',
         className
       )}
     >
-      {/* Background decoration */}
-      <div className="absolute top-0 left-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl -translate-y-1/2 -translate-x-1/2" />
-      
       {/* Header */}
-      <div className="relative flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-black/20">
-        <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-500/5 border border-blue-500/20 flex items-center justify-center">
-          <svg className="w-3 h-3 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/5 bg-white/[0.02]">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="text-xs font-medium text-white/80">Live Logs</span>
         </div>
-        <span className="text-xs font-medium text-white">Live Logs</span>
-        <div className="ml-auto flex items-center gap-1.5">
-          <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-          <span className="text-[10px] text-muted">{logs.length} entries</span>
-        </div>
+        <span className="text-[10px] text-white/30 font-mono">{logs.length} entries</span>
       </div>
 
       {/* Log output */}
       <div
         ref={scrollRef}
-        className="relative flex-1 overflow-y-auto p-3 font-mono text-[10px] space-y-0.5"
+        className="flex-1 overflow-y-auto p-2 font-mono text-[11px] space-y-0.5"
       >
         {logs.length === 0 ? (
-          <div className="text-muted text-center py-6 text-xs">Waiting for logs...</div>
+          <div className="text-white/30 text-center py-8 text-xs">Waiting for logs...</div>
         ) : (
-          logs.slice(-100).map((log, i) => (
-            <div key={`log-${i}`} className="flex gap-2 opacity-80 hover:opacity-100 transition-opacity">
-              <span className="text-muted/60 shrink-0">[{formatTime(log.timestamp)}]</span>
-              <span className={cn('shrink-0 uppercase w-10', getLevelClass(log.level))}>
-                {log.level?.slice(0, 5) || 'LOG'}
-              </span>
-              <span className="text-foreground/90 break-all">{log.message}</span>
-            </div>
-          ))
+          logs.slice(-100).map((log, i) => {
+            const style = getLogStyle(log.level);
+            return (
+              <div 
+                key={`log-${i}`} 
+                className={cn(
+                  'flex items-start gap-2 px-2 py-1 rounded border-l-2 transition-all',
+                  style.bg,
+                  style.border,
+                  'hover:bg-white/[0.03]'
+                )}
+              >
+                {/* Icon */}
+                <span className={cn('w-3 text-center shrink-0', style.text)}>
+                  {style.icon}
+                </span>
+                
+                {/* Timestamp */}
+                <span className="text-white/25 shrink-0 tabular-nums">
+                  {formatTime(log.timestamp)}
+                </span>
+                
+                {/* Level badge */}
+                <span className={cn('shrink-0 uppercase font-medium w-12', style.text)}>
+                  {log.level?.slice(0, 6) || 'LOG'}
+                </span>
+                
+                {/* Message */}
+                <span className="text-white/70 break-all leading-relaxed">
+                  {log.message}
+                </span>
+              </div>
+            );
+          })
         )}
       </div>
     </div>
