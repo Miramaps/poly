@@ -163,20 +163,54 @@ std::string get_status_json() {
     int time_left = 900 - secs_into_window;
     bool in_trading = secs_into_window <= 120;
     
+    // Get live config from engine
+    double entry_threshold = 0.36;
+    int shares = 10;
+    double sum_target = 0.99;
+    bool dca_enabled = true;
+    int trading_window = 120;
+    double cash = 1000.0;
+    double realized_pnl = 0.0;
+    double equity = 1000.0;
+    int up_pos = 0, down_pos = 0;
+    
+    if (g_engine_ptr) {
+        auto cfg = g_engine_ptr->get_config();
+        entry_threshold = cfg.move;
+        shares = cfg.shares;
+        sum_target = cfg.sum_target;
+        dca_enabled = cfg.dca_enabled;
+        trading_window = cfg.dump_window_sec;
+        
+        auto engine_status = g_engine_ptr->get_status();
+        cash = engine_status.cash;
+        realized_pnl = engine_status.realized_pnl;
+        equity = engine_status.equity;
+        up_pos = static_cast<int>(engine_status.positions.UP);
+        down_pos = static_cast<int>(engine_status.positions.DOWN);
+    }
+    
     nlohmann::json status = {
         {"success", true},
         {"data", {
             {"bot", {
                 {"enabled", g_auto_enabled.load()},
                 {"mode", "PAPER"},
-                {"uptime", 0}
+                {"uptime", 0},
+                {"config", {
+                    {"entryThreshold", entry_threshold},
+                    {"shares", shares},
+                    {"sumTarget", sum_target},
+                    {"dcaEnabled", dca_enabled},
+                    {"tradingWindowSec", trading_window}
+                }}
             }},
             {"portfolio", {
-                {"cash", 1000.0},
-                {"positions", {{"UP", 0}, {"DOWN", 0}}},
+                {"cash", cash},
+                {"positions", {{"UP", up_pos}, {"DOWN", down_pos}}},
                 {"unrealizedPnL", 0.0},
-                {"realizedPnL", 0.0},
-                {"equity", 1000.0}
+                {"realizedPnL", realized_pnl},
+                {"equity", equity}
             }},
             {"currentMarket", {
                 {"slug", g_market_slug},

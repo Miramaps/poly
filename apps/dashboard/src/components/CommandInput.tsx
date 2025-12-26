@@ -34,11 +34,13 @@ export function CommandInput({ className }: CommandInputProps) {
 
     try {
       const result = await sendCommand(command);
+      // API returns { success: true, data: "response text" }
+      const responseText = result.data || result.message || 'Command executed';
       setResponses((prev) => [
         ...prev,
         { 
           command, 
-          response: result.message || JSON.stringify(result, null, 2),
+          response: typeof responseText === 'string' ? responseText : JSON.stringify(responseText, null, 2),
           success: result.success !== false
         },
       ]);
