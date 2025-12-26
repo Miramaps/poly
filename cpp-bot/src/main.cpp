@@ -24,6 +24,7 @@ using poly::set_market_info;
 std::atomic<double> g_up_price{0.0};
 std::atomic<double> g_down_price{0.0};
 
+
 namespace {
     std::unique_ptr<poly::APIServer> g_server;
     std::unique_ptr<poly::WebSocketPriceStream> g_ws;
@@ -128,6 +129,15 @@ namespace {
         // Update the API server with latest prices
         set_live_prices(s_up_price, s_down_price);
         
+        // Call trading engine with orderbook update
+        if (poly::get_engine_ptr() && matched) {
+            poly::OrderbookSnapshot snapshot;
+            snapshot.asks.push_back({price, 100.0});  // Price with dummy size
+            snapshot.bids.push_back({price - 0.01, 100.0});
+            snapshot.timestamp = std::chrono::system_clock::now();
+            poly::get_engine_ptr()->on_orderbook_update(update.token_id, snapshot);
+        }
+        
         // Debug: log every 500th callback (less spam)
         if (callback_count <= 5 || callback_count % 500 == 0) {
             std::cout << "[PRICE CB #" << callback_count << "] " 
@@ -174,6 +184,7 @@ int main() {
         }
         
         poly::TradingEngine engine(config);
+        poly::set_engine_ptr(&engine);  // Set global pointer for callback
         engine.start();
         std::cout << "[ENGINE] Started" << std::endl;
         

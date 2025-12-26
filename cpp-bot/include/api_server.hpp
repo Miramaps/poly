@@ -33,6 +33,7 @@ void add_log(const std::string& level, const std::string& name, const std::strin
 void set_live_prices(double up_price, double down_price);
 void set_market_info(const std::string& slug, const std::string& question);
 void set_engine_ptr(TradingEngine* engine);
+TradingEngine* get_engine_ptr();
 
 std::string get_status_json();
 } // namespace poly

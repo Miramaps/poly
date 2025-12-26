@@ -581,4 +581,9 @@ void APIServer::run() {
     }
 }
 
+
+TradingEngine* get_engine_ptr() {
+    return g_engine_ptr;
+}
+
 } // namespace poly
