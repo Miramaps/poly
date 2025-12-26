@@ -145,6 +145,7 @@ private:
     };
     
     std::optional<Position> current_position_;
+    std::chrono::system_clock::time_point last_cycle_complete_time_;
     
     // Trade history (in-memory)
     std::vector<Trade> trade_history_;

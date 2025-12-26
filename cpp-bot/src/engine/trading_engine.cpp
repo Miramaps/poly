@@ -228,6 +228,12 @@ void TradingEngine::process_market(const std::string& market_slug) {
     
     // Check if we should enter a position
     if (!current_position_) {
+        // Check cooldown - wait at least 5 seconds between cycles
+        auto now_time = std::chrono::system_clock::now();
+        auto since_last = std::chrono::duration_cast<std::chrono::seconds>(now_time - last_cycle_complete_time_).count();
+        if (since_last < 5) {
+            return; // Still in cooldown
+        }
         std::string side;
         double price;
         
@@ -314,6 +320,7 @@ std::ostringstream oss2;
                 
                 // Clear position
                 current_position_.reset();
+                last_cycle_complete_time_ = std::chrono::system_clock::now();
             }
         }
     }
@@ -431,7 +438,7 @@ std::optional<Trade> TradingEngine::execute_trade(
         if (trade.leg == 2 && current_position_) {
             double profit = (1.0 - current_position_->avg_cost - trade.price) * shares;
             realized_pnl_ += profit;
-            cash_ += shares; // Settlement of binary option
+            cash_ += shares; // Settlement payout
         }
     }
     
