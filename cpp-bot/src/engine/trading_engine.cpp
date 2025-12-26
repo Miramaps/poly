@@ -208,22 +208,20 @@ void TradingEngine::process_market(const std::string& market_slug) {
     const auto& market = it->second;
     
     
-    // Extract end timestamp from market slug (e.g., btc-updown-15m-1766776500)
-    int64_t market_end_time = 0;
+    // Extract START timestamp from market slug
+    int64_t market_start_time = 0;
     size_t last_dash = market_slug.rfind('-');
     if (last_dash != std::string::npos) {
-        try { market_end_time = std::stoll(market_slug.substr(last_dash + 1)); } catch (...) {}
+        try { market_start_time = std::stoll(market_slug.substr(last_dash + 1)); } catch (...) {}
     }
-    
     auto now = std::chrono::system_clock::now();
     auto now_sec = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
-    int time_left = static_cast<int>(market_end_time - now_sec);
-    int secs_into_window = 900 - time_left;  // Correct calculation
+    int secs_into_window = static_cast<int>(now_sec - market_start_time);
+    int time_left = 900 - secs_into_window;
     
-    std::cout << "[ENGINE] process_market: " << market_slug << " | secs=" << secs_into_window 
+    std::cout << "[ENGINE] process_market: " << market_slug << " | secs=" << secs_into_window
               << " | time_left=" << time_left << " | window=" << config_.dump_window_sec << std::endl;
     
-    // Only trade in first 120 seconds of 15-min window
     if (secs_into_window < 0 || secs_into_window > config_.dump_window_sec) {
         return;
     }
