@@ -534,6 +534,7 @@ void APIServer::run() {
                             {"shares", t.shares},
                             {"price", t.price},
                             {"cost", t.cost},
+                            {"pnl", t.pnl},
                             {"timestamp", std::chrono::duration_cast<std::chrono::milliseconds>(t.timestamp.time_since_epoch()).count()}
                         });
                     }

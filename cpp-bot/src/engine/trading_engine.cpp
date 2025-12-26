@@ -438,6 +438,7 @@ std::optional<Trade> TradingEngine::execute_trade(
         if (trade.leg == 2 && current_position_) {
             double profit = (1.0 - current_position_->avg_cost - trade.price) * shares;
             realized_pnl_ += profit;
+            trade.pnl = profit;
             cash_ += shares; // Settlement payout
         }
     }

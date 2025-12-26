@@ -27,6 +27,7 @@ struct Trade {
     double price;
     double cost;
     double fee;
+    double pnl = 0.0;
     std::chrono::system_clock::time_point timestamp;
 };
 
