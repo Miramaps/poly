@@ -1,19 +1,29 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3001';
 
-// Get auth header from localStorage or env
+// Base64 encode that works in both browser and Node
+function base64Encode(str: string): string {
+  if (typeof window !== 'undefined' && typeof btoa === 'function') {
+    return btoa(str);
+  }
+  return Buffer.from(str).toString('base64');
+}
+
+// Get auth header from localStorage or default
 function getAuthHeader(): string {
   if (typeof window !== 'undefined') {
     const stored = localStorage.getItem('poly_auth');
     if (stored) return stored;
   }
   // Default credentials - must match DASH_USER/DASH_PASS in .env
-  return `Basic ${Buffer.from('admin:sexmachine666').toString('base64')}`;
+  return `Basic ${base64Encode('admin:sexmachine666')}`;
 }
 
 export function setAuth(username: string, password: string) {
-  const auth = `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
-  localStorage.setItem('poly_auth', auth);
+  const auth = `Basic ${base64Encode(`${username}:${password}`)}`;
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('poly_auth', auth);
+  }
 }
 
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
@@ -67,8 +77,7 @@ export async function getConfig() {
   return fetchApi<{ success: boolean; data: any }>('/api/config');
 }
 
-// ─── Wallet API ──────────────────────────────────────────────────────────────
-
+// Wallet API
 export async function getWallet() {
   return fetchApi<{ success: boolean; data: {
     hasWallet: boolean;
@@ -106,8 +115,6 @@ export async function withdrawFunds(toAddress: string, amount: number) {
     body: JSON.stringify({ toAddress, amount }),
   });
 }
-
-// ─── Trading Mode API ────────────────────────────────────────────────────────
 
 export async function setTradingMode(mode: 'PAPER' | 'LIVE') {
   return fetchApi<{ 
@@ -147,4 +154,3 @@ export function createWebSocket(onMessage: (data: any) => void, onError?: (error
 
   return ws;
 }
-

@@ -1,0 +1,7 @@
+/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles/poly-trader-cpp.dir
+/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles/edit_cache.dir
+/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles/rebuild_cache.dir
+/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles/list_install_components.dir
+/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles/install.dir
+/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles/install/local.dir
+/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles/install/strip.dir

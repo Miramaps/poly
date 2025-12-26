@@ -11,25 +11,28 @@ import { CycleInfo } from '@/components/CycleInfo';
 import { LogViewer } from '@/components/LogViewer';
 import { CommandInput } from '@/components/CommandInput';
 import { useWebSocket } from '@/hooks/useWebSocket';
-import { getEquity, getStatus } from '@/lib/api';
+import { getEquity, getStatus, getLogs } from '@/lib/api';
 import { formatCurrency, formatPercent, formatDuration } from '@/lib/utils';
 
 export default function DashboardPage() {
-  const { isConnected, status, logs } = useWebSocket();
+  const { isConnected, status, logs: wsLogs } = useWebSocket();
   const [equityHistory, setEquityHistory] = useState<any[]>([]);
   const [initialStatus, setInitialStatus] = useState<any>(null);
   const [tradingMode, setTradingMode] = useState<'PAPER' | 'LIVE'>('PAPER');
+  const [polledLogs, setPolledLogs] = useState<any[]>([]);
 
-  // Fetch initial data
+  // Fetch initial data and poll for status updates
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [equityRes, statusRes] = await Promise.all([
+        const [equityRes, statusRes, logsRes] = await Promise.all([
           getEquity(500),
           getStatus(),
+          getLogs(100),
         ]);
         setEquityHistory(equityRes.data || []);
         setInitialStatus(statusRes.data);
+        setPolledLogs(logsRes.data || []);
         if (statusRes.data?.bot?.tradingMode) {
           setTradingMode(statusRes.data.bot.tradingMode);
         }
@@ -38,6 +41,25 @@ export default function DashboardPage() {
       }
     };
     fetchData();
+    
+    // Poll status and logs every 500ms for near-instant updates
+    const pollInterval = setInterval(async () => {
+      try {
+        const [statusRes, logsRes] = await Promise.all([
+          getStatus(),
+          getLogs(100),
+        ]);
+        setInitialStatus(statusRes.data);
+        setPolledLogs(logsRes.data || []);
+        if (statusRes.data?.bot?.tradingMode) {
+          setTradingMode(statusRes.data.bot.tradingMode);
+        }
+      } catch (err) {
+        console.error('Status poll failed:', err);
+      }
+    }, 500);
+    
+    return () => clearInterval(pollInterval);
   }, []);
 
   // Update trading mode from WebSocket
@@ -59,9 +81,19 @@ export default function DashboardPage() {
   };
 
   const botConfig = currentStatus?.bot?.config;
-  const currentMarket = currentStatus?.currentMarket;
+  const windowData = currentStatus?.window;
   const currentCycle = currentStatus?.currentCycle;
   const orderbooks = currentStatus?.orderbooks || { UP: null, DOWN: null };
+
+  // Build market object with window timing - use secondsLeft directly
+  const windowSecondsLeft = windowData?.secondsLeft ?? 0;
+  const currentMarket = currentStatus?.currentMarket ? {
+    slug: currentStatus.currentMarket.slug,
+    status: windowSecondsLeft > 0 ? 'live' : 'ended',
+    secondsLeft: windowSecondsLeft,
+    startTime: windowData?.windowStart ? new Date(windowData.windowStart * 1000).toISOString() : undefined,
+    endTime: windowData?.windowEnd ? new Date(windowData.windowEnd * 1000).toISOString() : undefined,
+  } : null;
 
   const upAsk = orderbooks.UP?.asks?.[0]?.price;
   const downAsk = orderbooks.DOWN?.asks?.[0]?.price;
@@ -82,7 +114,7 @@ export default function DashboardPage() {
 
       <main className="max-w-7xl mx-auto px-4 py-6">
         {/* Header Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           <StatusCard
             title="Equity"
             value={formatCurrency(portfolio.equity)}
@@ -107,11 +139,14 @@ export default function DashboardPage() {
           />
         </div>
 
+        {/* Market Info Bar - Full width under stats */}
+        <MarketInfo market={currentMarket} className="mb-6" />
+
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
           {/* Left Column - Logs & Commands */}
           <div className="lg:col-span-2 space-y-4">
-            <LogViewer logs={logs} className="h-[300px]" />
+            <LogViewer logs={wsLogs.length > 0 ? wsLogs : polledLogs.map(l => ({ ...l, name: 'BOT' }))} className="h-[300px]" />
             <CommandInput className="h-[400px]" />
           </div>
 
@@ -122,11 +157,6 @@ export default function DashboardPage() {
               downAsk={downAsk}
               upBid={upBid}
               downBid={downBid}
-            />
-            <MarketInfo
-              market={currentMarket}
-              watcherActive={currentStatus?.watcherActive}
-              watcherSecondsRemaining={currentStatus?.watcherSecondsRemaining}
             />
             <CycleInfo cycle={currentCycle} orderbooks={orderbooks} />
           </div>

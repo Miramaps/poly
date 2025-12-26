@@ -32,13 +32,19 @@ export function LogViewer({ logs, className }: LogViewerProps) {
   const getLevelClass = (level: string) => {
     switch (level.toLowerCase()) {
       case 'error':
-        return 'log-error';
+        return 'text-red-500';
       case 'warn':
-        return 'log-warn';
+        return 'text-yellow-500';
+      case 'trade':
+        return 'text-green-400 font-bold';
+      case 'signal':
+        return 'text-cyan-400';
+      case 'market':
+        return 'text-blue-400';
       case 'info':
-        return 'log-info';
+        return 'text-gray-400';
       default:
-        return 'log-debug';
+        return 'text-gray-500';
     }
   };
 
@@ -68,13 +74,12 @@ export function LogViewer({ logs, className }: LogViewerProps) {
           <div className="text-muted text-center py-8">Waiting for logs...</div>
         ) : (
           logs.slice(-100).map((log, i) => (
-            <div key={`log-${i}`} className="flex gap-2 opacity-80 hover:opacity-100">
-              <span className="text-muted shrink-0">[{formatTime(log.timestamp)}]</span>
-              <span className={cn('shrink-0 uppercase text-[10px]', getLevelClass(log.level))}>
-                {log.level.slice(0, 3)}
+            <div key={`log-${i}`} className="flex gap-2 opacity-90 hover:opacity-100">
+              <span className="text-muted shrink-0 text-[10px]">[{formatTime(log.timestamp)}]</span>
+              <span className={cn('shrink-0 uppercase text-[10px] w-12', getLevelClass(log.level))}>
+                {log.level?.slice(0, 6) || 'LOG'}
               </span>
-              <span className="text-muted shrink-0">[{log.name}]</span>
-              <span className="text-foreground/90 break-all">{log.message}</span>
+              <span className="text-foreground break-all">{log.message}</span>
             </div>
           ))
         )}
