@@ -522,7 +522,23 @@ void APIServer::run() {
                           "Content-Type: application/json\r\n\r\n" + cfg.dump();
             }
             else if (base_path == "/api/trades") {
-                nlohmann::json trades = {{"success", true}, {"data", nlohmann::json::array()}};
+                nlohmann::json trades_arr = nlohmann::json::array();
+                if (g_engine_ptr) {
+                    auto status = g_engine_ptr->get_status();
+                    for (const auto& t : status.recent_trades) {
+                        trades_arr.push_back({
+                            {"id", t.id},
+                            {"market", t.market_slug},
+                            {"leg", t.leg},
+                            {"side", t.side},
+                            {"shares", t.shares},
+                            {"price", t.price},
+                            {"cost", t.cost},
+                            {"timestamp", std::chrono::duration_cast<std::chrono::milliseconds>(t.timestamp.time_since_epoch()).count()}
+                        });
+                    }
+                }
+                nlohmann::json trades = {{"success", true}, {"data", trades_arr}};
                 response = "HTTP/1.1 200 OK\r\n" + cors +
                           "Content-Type: application/json\r\n\r\n" + trades.dump();
             }
