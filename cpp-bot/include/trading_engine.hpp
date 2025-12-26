@@ -11,6 +11,9 @@
 
 namespace poly {
 
+// Forward declaration
+class PolymarketClient;
+
 struct OrderbookSnapshot {
     std::vector<std::pair<double, double>> bids;  // price, size
     std::vector<std::pair<double, double>> asks;
@@ -27,26 +30,45 @@ struct Trade {
     double price;
     double cost;
     double fee;
-    double pnl = 0.0;
+    double pnl = 0.0;  // Profit/loss for this trade (if leg 2)
+    bool is_live = false;  // true if this was a real trade, false if paper
     std::chrono::system_clock::time_point timestamp;
 };
 
 struct Config {
-    double entry_threshold = 0.36;
+    double entry_threshold = 0.35;
     int shares = 10;
     bool dca_enabled = true;
     std::vector<double> dca_levels = {0.30, 0.25, 0.20, 0.15};
     double dca_multiplier = 1.5;
     double sum_target = 0.99;
     bool breakeven_enabled = true;
-    double move = 0.36;  // Entry threshold
+    double move = 0.36;  // Updated threshold
     int window_min = 15;
-    int dump_window_sec = 120;  // Trading window seconds (first 2 minutes)
+    int dump_window_sec = 3;
+};
+
+enum class TradingMode {
+    PAPER,
+    LIVE
+};
+
+struct CycleStatus {
+    bool active = false;
+    std::string status = "pending";  // "pending", "leg1_done", "complete", "incomplete"
+    std::string leg1_side;
+    double leg1_price = 0.0;
+    double leg1_shares = 0.0;
+    std::string leg2_side;
+    double leg2_price = 0.0;
+    double leg2_shares = 0.0;
+    double total_cost = 0.0;
+    double pnl = 0.0;
 };
 
 struct EngineStatus {
     bool running;
-    std::string mode;
+    std::string mode;  // "PAPER" or "LIVE"
     double cash;
     struct {
         double UP;
@@ -65,33 +87,20 @@ struct EngineStatus {
     Config config;
     int64_t uptime_seconds;
     std::vector<Trade> recent_trades;
-    struct CurrentCycle {
-        bool active = false;
-        std::string status; // pending, leg1_done, complete
-        std::string leg1_side;
-        double leg1_price = 0;
-        double leg1_shares = 0;
-        std::string leg2_side;
-        double leg2_price = 0;
-        double leg2_shares = 0;
-        double total_cost = 0;
-        double pnl = 0;
-    };
-    CurrentCycle current_cycle;
-    CurrentCycle last_completed_cycle;
+    bool live_trading_available = false;
+    CycleStatus current_cycle;
 };
 
-class AsyncTradeWriter;
 class TradingEngine {
 public:
     explicit TradingEngine(Config config);
     ~TradingEngine();
 
-    // Disable copy, enable move
+    // Disable copy and move (contains atomic)
     TradingEngine(const TradingEngine&) = delete;
     TradingEngine& operator=(const TradingEngine&) = delete;
-    TradingEngine(TradingEngine&&) = default;
-    TradingEngine& operator=(TradingEngine&&) = default;
+    TradingEngine(TradingEngine&&) = delete;
+    TradingEngine& operator=(TradingEngine&&) = delete;
 
     void start();
     void stop();
@@ -99,9 +108,21 @@ public:
     // Get current status for API
     EngineStatus get_status() const;
     
+    // Get current config
+    Config get_config() const;
+    
+    // Configuration setters
+    void set_entry_threshold(double value);
+    void set_shares(int value);
+    void set_sum_target(double value);
+    void set_dca_enabled(bool value);
+    void set_trading_window(int seconds);
+    
     // Set active market to watch
     void set_market(const std::string& slug, const std::string& up_token, const std::string& down_token);
-    void set_async_writer(AsyncTradeWriter* writer);
+    
+    // Set async trade writer for database persistence
+    void set_async_writer(class AsyncTradeWriter* writer);
     
     // Called when orderbook updates arrive
     void on_orderbook_update(const std::string& token_id, OrderbookSnapshot snapshot);
@@ -115,15 +136,27 @@ public:
         double price
     );
     
-    // Update config values dynamically
-    void set_entry_threshold(double value);
-    void set_shares(int value);
-    void set_sum_target(double value);
-    void set_dca_enabled(bool value);
-    void set_trading_window(int seconds);
+    // ============ TRADING MODE CONTROL ============
     
-    // Get current config
-    Config get_config() const;
+    // Set trading mode (PAPER or LIVE)
+    bool set_trading_mode(TradingMode mode);
+    TradingMode get_trading_mode() const;
+    std::string get_trading_mode_string() const;
+    
+    // Check if live trading is available
+    bool is_live_trading_available() const;
+    
+    // Set the Polymarket client for live trading
+    void set_polymarket_client(std::shared_ptr<PolymarketClient> client);
+    
+    // Refresh balance from Polymarket (for live trading)
+    void refresh_balance();
+    
+    // Set cash manually (for paper trading)
+    void set_cash(double amount);
+    
+    // Reset paper trading state
+    void reset_paper_trading();
 
 private:
     Config config_;
@@ -134,7 +167,10 @@ private:
     // Portfolio state
     double cash_ = 1000.0;
     double realized_pnl_ = 0.0;
-    std::string trading_mode_ = "PAPER";
+    TradingMode trading_mode_ = TradingMode::PAPER;
+    
+    // Polymarket client for live trading
+    std::shared_ptr<PolymarketClient> polymarket_client_;
     
     // Market state
     struct MarketState {
@@ -160,12 +196,16 @@ private:
     };
     
     std::optional<Position> current_position_;
-    std::chrono::system_clock::time_point last_cycle_complete_time_;
-    EngineStatus::CurrentCycle last_completed_cycle_;
     
     // Trade history (in-memory)
     std::vector<Trade> trade_history_;
-    AsyncTradeWriter* async_writer_{nullptr};
+    
+    // Cycle tracking
+    CycleStatus last_completed_cycle_;
+    std::chrono::system_clock::time_point last_cycle_complete_time_;
+    
+    // Async trade writer
+    class AsyncTradeWriter* async_writer_ = nullptr;
     
     // Trading logic
     void process_market(const std::string& market_slug);
@@ -175,7 +215,24 @@ private:
     // Helper functions
     double get_best_bid(const OrderbookSnapshot& book) const;
     double get_best_ask(const OrderbookSnapshot& book) const;
+    
+    // Execute trade via Polymarket API (live mode)
+    std::optional<Trade> execute_live_trade(
+        const std::string& market_slug,
+        const std::string& side,
+        const std::string& token_id,
+        double shares,
+        double price
+    );
+    
+    // Execute paper trade (simulation)
+    std::optional<Trade> execute_paper_trade(
+        const std::string& market_slug,
+        const std::string& side,
+        const std::string& token_id,
+        double shares,
+        double price
+    );
 };
 
 } // namespace poly
-

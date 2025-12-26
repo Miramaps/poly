@@ -45,11 +45,10 @@ target_include_directories(poly-trader-cpp PRIVATE
 target_link_libraries(poly-trader-cpp PRIVATE
     Threads::Threads
     ${CURL_LIBRARIES}
-    ${PostgreSQL_LIBRARIES}
+    PostgreSQL::PostgreSQL
     ${Boost_LIBRARIES}
     OpenSSL::SSL
     OpenSSL::Crypto
-    pq
 )
 
 # Compiler flags

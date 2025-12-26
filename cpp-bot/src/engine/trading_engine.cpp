@@ -1,4 +1,5 @@
 #include "trading_engine.hpp"
+#include "polymarket_client.hpp"
 #include "async_writer.hpp"
 #include "api_server.hpp"
 #include <iostream>
@@ -6,6 +7,8 @@
 #include <sstream>
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 
 namespace poly {
 using ::poly::add_log;
@@ -64,11 +67,15 @@ EngineStatus TradingEngine::get_status() const {
     
     EngineStatus status;
     status.running = running_;
-    status.mode = trading_mode_;
+    status.mode = (trading_mode_ == TradingMode::LIVE) ? "LIVE" : "PAPER";
     status.cash = cash_;
     status.realized_pnl = realized_pnl_;
     status.config = config_;
     status.market_slug = active_market_slug_;
+    
+    // Check if live trading is available (private key configured)
+    const char* pk = std::getenv("POLYMARKET_PRIVATE_KEY");
+    status.live_trading_available = (pk != nullptr && std::strlen(pk) > 0);
     
     // Calculate uptime
     auto now = std::chrono::system_clock::now();
@@ -416,13 +423,28 @@ std::optional<Trade> TradingEngine::execute_trade(
     double shares,
     double price
 ) {
-    // TODO: Implement actual API call to Polymarket
-    // For now, simulate the trade
+    std::cout << "[ENGINE] execute_trade: mode=" << get_trading_mode_string() 
+              << " side=" << side << " shares=" << shares << " price=$" << price << std::endl;
     
-    std::cout << "[ENGINE] execute_trade: side=" << side << " shares=" << shares << " price=$" << price << std::endl;
+    // Route to appropriate trade execution method
+    if (trading_mode_ == TradingMode::LIVE && polymarket_client_) {
+        return execute_live_trade(market_slug, side, token_id, shares, price);
+    } else {
+        return execute_paper_trade(market_slug, side, token_id, shares, price);
+    }
+}
+
+std::optional<Trade> TradingEngine::execute_paper_trade(
+    const std::string& market_slug,
+    const std::string& side,
+    const std::string& token_id,
+    double shares,
+    double price
+) {
+    std::cout << "[PAPER] Executing paper trade: " << side << " " << shares << " @ $" << price << std::endl;
     
     Trade trade{
-        .id = "trade_" + std::to_string(
+        .id = "paper_" + std::to_string(
             std::chrono::system_clock::now().time_since_epoch().count()
         ),
         .market_slug = market_slug,
@@ -433,10 +455,10 @@ std::optional<Trade> TradingEngine::execute_trade(
         .price = price,
         .cost = shares * price,
         .fee = 0.0,
+        .pnl = 0.0,
+        .is_live = false,
         .timestamp = std::chrono::system_clock::now()
     };
-    
-    std::cout << "[ENGINE] Trade created: price=$" << trade.price << " cost=$" << trade.cost << std::endl;
     
     // Store trade in history
     {
@@ -472,6 +494,88 @@ std::optional<Trade> TradingEngine::execute_trade(
         }
     }
     
+    std::cout << "[PAPER] ✓ Trade simulated: " << trade.id << std::endl;
+    return trade;
+}
+
+std::optional<Trade> TradingEngine::execute_live_trade(
+    const std::string& market_slug,
+    const std::string& side,
+    const std::string& token_id,
+    double shares,
+    double price
+) {
+    if (!polymarket_client_) {
+        std::cerr << "[LIVE] ✗ No Polymarket client configured!" << std::endl;
+        add_log("error", "LIVE", "No Polymarket client configured");
+        return std::nullopt;
+    }
+    
+    std::cout << "[LIVE] 🔴 Executing LIVE trade: " << side << " " << shares << " @ $" << price << std::endl;
+    add_log("warn", "LIVE", "Executing LIVE order: " + side + " x" + std::to_string((int)shares) + " @ $" + std::to_string(price));
+    
+    // Place order via Polymarket API
+    auto result = polymarket_client_->place_order(token_id, side == "UP" ? "BUY" : "BUY", shares, price);
+    
+    if (!result.success) {
+        std::cerr << "[LIVE] ✗ Order failed: " << result.error << std::endl;
+        add_log("error", "LIVE", "Order failed: " + result.error);
+        return std::nullopt;
+    }
+    
+    Trade trade{
+        .id = result.order_id.empty() ? ("live_" + std::to_string(
+            std::chrono::system_clock::now().time_since_epoch().count()
+        )) : result.order_id,
+        .market_slug = market_slug,
+        .leg = current_position_ ? 2 : 1,
+        .side = side,
+        .token_id = token_id,
+        .shares = shares,
+        .price = result.price > 0 ? result.price : price,
+        .cost = shares * (result.price > 0 ? result.price : price),
+        .fee = 0.0,
+        .pnl = 0.0,
+        .is_live = true,
+        .timestamp = std::chrono::system_clock::now()
+    };
+    
+    // Store trade in history
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        trade_history_.push_back(trade);
+        
+        // Queue for async database write
+        if (async_writer_) {
+            poly::TradeRecord record{
+                .id = trade.id,
+                .market_slug = trade.market_slug,
+                .leg = trade.leg,
+                .side = trade.side,
+                .token_id = trade.token_id,
+                .shares = trade.shares,
+                .price = trade.price,
+                .cost = trade.cost,
+                .fee = 0.0,
+                .timestamp = std::chrono::duration_cast<std::chrono::seconds>(trade.timestamp.time_since_epoch()).count()
+            };
+            async_writer_->queue_trade(record);
+        }
+        
+        // Update cash balance (will be synced from Polymarket later)
+        cash_ -= trade.cost;
+        
+        // If this is leg 2 (hedge), update realized PnL
+        if (trade.leg == 2 && current_position_) {
+            double profit = (1.0 - current_position_->avg_cost - trade.price) * shares;
+            realized_pnl_ += profit;
+            trade.pnl = profit;
+            cash_ += shares; // Settlement payout
+        }
+    }
+    
+    std::cout << "[LIVE] ✓ Order placed: " << trade.id << std::endl;
+    add_log("info", "LIVE", "Order confirmed: " + trade.id);
     return trade;
 }
 
@@ -527,5 +631,103 @@ void TradingEngine::set_async_writer(AsyncTradeWriter* writer) {
     async_writer_ = writer;
 }
 
+// ============ TRADING MODE CONTROL ============
+
+bool TradingEngine::set_trading_mode(TradingMode mode) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    
+    if (mode == TradingMode::LIVE) {
+        // Check if live trading is available
+        const char* pk = std::getenv("POLYMARKET_PRIVATE_KEY");
+        if (!pk || std::strlen(pk) == 0) {
+            std::cerr << "[MODE] Cannot enable LIVE trading: No private key configured" << std::endl;
+            add_log("error", "MODE", "Cannot enable LIVE trading: No private key configured");
+            return false;
+        }
+        
+        trading_mode_ = TradingMode::LIVE;
+        std::cout << "[MODE] 🔴 LIVE TRADING ENABLED - Real money trades!" << std::endl;
+        add_log("warn", "MODE", "🔴 LIVE TRADING ENABLED - Real money trades!");
+        
+        // Refresh balance from Polymarket
+        if (polymarket_client_) {
+            auto balance = polymarket_client_->get_balance();
+            if (balance.success) {
+                cash_ = balance.balance;
+                std::cout << "[MODE] Balance synced: $" << cash_ << " USDC" << std::endl;
+                add_log("info", "MODE", "Balance synced: $" + std::to_string(cash_) + " USDC");
+            }
+        }
+    } else {
+        trading_mode_ = TradingMode::PAPER;
+        std::cout << "[MODE] 📝 Paper trading mode enabled" << std::endl;
+        add_log("info", "MODE", "📝 Paper trading mode enabled");
+    }
+    
+    return true;
+}
+
+TradingMode TradingEngine::get_trading_mode() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return trading_mode_;
+}
+
+std::string TradingEngine::get_trading_mode_string() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return (trading_mode_ == TradingMode::LIVE) ? "LIVE" : "PAPER";
+}
+
+bool TradingEngine::is_live_trading_available() const {
+    const char* pk = std::getenv("POLYMARKET_PRIVATE_KEY");
+    return (pk != nullptr && std::strlen(pk) > 0);
+}
+
+void TradingEngine::set_polymarket_client(std::shared_ptr<PolymarketClient> client) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    polymarket_client_ = client;
+    std::cout << "[ENGINE] Polymarket client configured" << std::endl;
+}
+
+void TradingEngine::refresh_balance() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    
+    if (!polymarket_client_) {
+        std::cerr << "[ENGINE] Cannot refresh balance: No Polymarket client" << std::endl;
+        return;
+    }
+    
+    auto balance = polymarket_client_->get_balance();
+    if (balance.success) {
+        cash_ = balance.balance;
+        std::cout << "[ENGINE] Balance refreshed: $" << cash_ << " USDC" << std::endl;
+        add_log("info", "WALLET", "Balance: $" + std::to_string(cash_) + " USDC");
+    } else {
+        std::cerr << "[ENGINE] Failed to refresh balance: " << balance.error << std::endl;
+        add_log("error", "WALLET", "Failed to refresh balance: " + balance.error);
+    }
+}
+
+void TradingEngine::set_cash(double amount) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    cash_ = amount;
+    std::cout << "[ENGINE] Cash set to $" << amount << std::endl;
+}
+
+void TradingEngine::reset_paper_trading() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    
+    // Reset to paper mode
+    trading_mode_ = TradingMode::PAPER;
+    
+    // Reset portfolio
+    cash_ = 1000.0;
+    realized_pnl_ = 0.0;
+    current_position_.reset();
+    trade_history_.clear();
+    last_completed_cycle_ = CycleStatus{};
+    
+    std::cout << "[ENGINE] Paper trading reset - Cash: $1000" << std::endl;
+    add_log("info", "ENGINE", "Paper trading reset - starting fresh with $1000");
+}
 
 } // namespace poly

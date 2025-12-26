@@ -1,0 +1,7 @@
+# Python dependencies for Polymarket live trading
+# Install with: pip install -r scripts/requirements.txt
+
+py-clob-client>=0.17.0
+web3>=6.0.0
+eth-account>=0.8.0
+

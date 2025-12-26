@@ -5,6 +5,7 @@
 #include <sstream>
 #include <iomanip>
 #include <cstring>
+#include <cstdlib>
 #include <mutex>
 #include <vector>
 #include <deque>
@@ -27,8 +28,30 @@ static std::string g_market_question;
 static std::atomic<bool> g_auto_enabled{false};
 static TradingEngine* g_engine_ptr = nullptr;
 
+// Current cycle tracking
+struct CurrentCycle {
+    std::string id;
+    std::string status;  // "pending", "leg1_done", "complete", "incomplete"
+    std::string leg1Side;
+    double leg1Price = 0.0;
+    double leg1Shares = 0.0;
+    std::string leg2Side;
+    double leg2Price = 0.0;
+    double leg2Shares = 0.0;
+    double totalCost = 0.0;
+    double lockedInPct = 0.0;
+    double lockedInProfit = 0.0;
+    bool active = false;
+};
+static CurrentCycle g_current_cycle;
+static std::mutex g_cycle_mutex;
+
 void set_engine_ptr(TradingEngine* engine) {
     g_engine_ptr = engine;
+}
+
+TradingEngine* get_engine_ptr() {
+    return g_engine_ptr;
 }
 
 void add_log(const std::string& level, const std::string& name, const std::string& message) {
@@ -62,6 +85,47 @@ void set_market_info(const std::string& slug, const std::string& question) {
     std::lock_guard<std::mutex> lock(g_price_mutex);
     g_market_slug = slug;
     g_market_question = question;
+}
+
+// Called when leg 1 is executed
+void set_cycle_leg1(const std::string& side, double price, double shares, double cost) {
+    std::lock_guard<std::mutex> lock(g_cycle_mutex);
+    
+    g_current_cycle.id = "cycle_" + std::to_string(
+        std::chrono::system_clock::now().time_since_epoch().count()
+    );
+    g_current_cycle.status = "leg1_done";
+    g_current_cycle.leg1Side = side;
+    g_current_cycle.leg1Price = price;
+    g_current_cycle.leg1Shares = shares;
+    g_current_cycle.totalCost = cost;
+    g_current_cycle.active = true;
+    
+    add_log("info", "CYCLE", "Leg 1 executed: " + side + " @ $" + std::to_string(price));
+}
+
+// Called when leg 2 is executed (cycle complete)
+void set_cycle_leg2(const std::string& side, double price, double shares, double profit, double pct) {
+    std::lock_guard<std::mutex> lock(g_cycle_mutex);
+    
+    if (g_current_cycle.active) {
+        g_current_cycle.status = "complete";
+        g_current_cycle.leg2Side = side;
+        g_current_cycle.leg2Price = price;
+        g_current_cycle.leg2Shares = shares;
+        g_current_cycle.totalCost += price * shares;
+        g_current_cycle.lockedInProfit = profit;
+        g_current_cycle.lockedInPct = pct;
+        
+        add_log("info", "CYCLE", "Cycle complete! Profit: $" + std::to_string(profit) + 
+                " (" + std::to_string(pct * 100) + "%)");
+    }
+}
+
+// Called to clear the cycle after it's done
+void clear_cycle() {
+    std::lock_guard<std::mutex> lock(g_cycle_mutex);
+    g_current_cycle = CurrentCycle();
 }
 
 APIServer::APIServer(TradingEngine& engine, Database& db, int port)
@@ -155,7 +219,8 @@ bool check_auth(const std::string& request) {
 }
 
 std::string get_status_json() {
-    std::lock_guard<std::mutex> lock(g_price_mutex);
+    std::lock_guard<std::mutex> price_lock(g_price_mutex);
+    std::lock_guard<std::mutex> cycle_lock(g_cycle_mutex);
     
     auto now = std::chrono::system_clock::now();
     auto now_sec = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
@@ -173,6 +238,7 @@ std::string get_status_json() {
     double realized_pnl = 0.0;
     double equity = 1000.0;
     int up_pos = 0, down_pos = 0;
+    int64_t uptime = 0;
     
     if (g_engine_ptr) {
         auto cfg = g_engine_ptr->get_config();
@@ -188,6 +254,83 @@ std::string get_status_json() {
         equity = engine_status.equity;
         up_pos = static_cast<int>(engine_status.positions.UP);
         down_pos = static_cast<int>(engine_status.positions.DOWN);
+        uptime = engine_status.uptime_seconds;
+    }
+    
+    // Build orderbooks with proper format for frontend
+    nlohmann::json orderbooks = {
+        {"UP", {
+            {"bids", nlohmann::json::array()},
+            {"asks", nlohmann::json::array()}
+        }},
+        {"DOWN", {
+            {"bids", nlohmann::json::array()},
+            {"asks", nlohmann::json::array()}
+        }}
+    };
+    
+    // Add UP prices
+    if (g_up_price > 0) {
+        orderbooks["UP"]["asks"].push_back({{"price", g_up_price}});
+        if (g_up_price > 0.01) {
+            orderbooks["UP"]["bids"].push_back({{"price", g_up_price - 0.01}});
+        }
+    }
+    
+    // Add DOWN prices
+    if (g_down_price > 0) {
+        orderbooks["DOWN"]["asks"].push_back({{"price", g_down_price}});
+        if (g_down_price > 0.01) {
+            orderbooks["DOWN"]["bids"].push_back({{"price", g_down_price - 0.01}});
+        }
+    }
+    
+    // Build current cycle info from positions
+    nlohmann::json currentCycle = nullptr;
+    
+    // If we have a position, show it as leg1_done
+    if (up_pos > 0 || down_pos > 0) {
+        std::string side = up_pos > 0 ? "UP" : "DOWN";
+        int pos_shares = up_pos > 0 ? up_pos : down_pos;
+        double price = up_pos > 0 ? g_up_price : g_down_price;
+        double cost = pos_shares * price;
+        
+        currentCycle = {
+            {"id", "cycle_live"},
+            {"status", "leg1_done"},
+            {"leg1Side", side},
+            {"leg1Price", price > 0 ? price : 0.35},  // Show last known price
+            {"leg1Shares", pos_shares},
+            {"totalCost", cost > 0 ? cost : pos_shares * 0.35}
+        };
+    }
+    // Legacy cycle support
+    else if (g_current_cycle.active) {
+        currentCycle = {
+            {"id", g_current_cycle.id},
+            {"status", g_current_cycle.status},
+            {"leg1Side", g_current_cycle.leg1Side},
+            {"leg1Price", g_current_cycle.leg1Price},
+            {"leg1Shares", g_current_cycle.leg1Shares},
+            {"totalCost", g_current_cycle.totalCost}
+        };
+        
+        if (g_current_cycle.status == "complete") {
+            currentCycle["leg2Side"] = g_current_cycle.leg2Side;
+            currentCycle["leg2Price"] = g_current_cycle.leg2Price;
+            currentCycle["leg2Shares"] = g_current_cycle.leg2Shares;
+            currentCycle["lockedInPct"] = g_current_cycle.lockedInPct;
+            currentCycle["lockedInProfit"] = g_current_cycle.lockedInProfit;
+        }
+    }
+    
+    // Get trading mode from engine
+    std::string trading_mode = "PAPER";
+    bool live_available = false;
+    if (g_engine_ptr) {
+        auto engine_status = g_engine_ptr->get_status();
+        trading_mode = engine_status.mode;
+        live_available = engine_status.live_trading_available;
     }
     
     nlohmann::json status = {
@@ -195,8 +338,10 @@ std::string get_status_json() {
         {"data", {
             {"bot", {
                 {"enabled", g_auto_enabled.load()},
-                {"mode", "PAPER"},
-                {"uptime", 0},
+                {"mode", trading_mode},
+                {"tradingMode", trading_mode},
+                {"liveAvailable", live_available},
+                {"uptime", uptime},
                 {"config", {
                     {"entryThreshold", entry_threshold},
                     {"shares", shares},
@@ -220,28 +365,9 @@ std::string get_status_json() {
                 {"timeLeft", time_left},
                 {"inTradingWindow", in_trading}
             }},
-            {"currentCycle", {
-                {"active", g_engine_ptr ? (g_engine_ptr->get_status().current_cycle.active) : false},
-                {"status", g_engine_ptr ? g_engine_ptr->get_status().current_cycle.status : "pending"},
-                {"leg1Side", g_engine_ptr ? g_engine_ptr->get_status().current_cycle.leg1_side : ""},
-                {"leg1Price", g_engine_ptr ? g_engine_ptr->get_status().current_cycle.leg1_price : 0.0},
-                {"leg1Shares", g_engine_ptr ? g_engine_ptr->get_status().current_cycle.leg1_shares : 0.0},
-                {"totalCost", g_engine_ptr ? g_engine_ptr->get_status().current_cycle.total_cost : 0.0},
-                {"leg2Side", g_engine_ptr ? g_engine_ptr->get_status().current_cycle.leg2_side : ""},
-                {"leg2Price", g_engine_ptr ? g_engine_ptr->get_status().current_cycle.leg2_price : 0.0},
-                {"leg2Shares", g_engine_ptr ? g_engine_ptr->get_status().current_cycle.leg2_shares : 0.0},
-                {"pnl", g_engine_ptr ? g_engine_ptr->get_status().current_cycle.pnl : 0.0}
-            }},
-            {"orderbooks", {
-                {"UP", {
-                    {"bestBid", g_up_price > 0.01 ? g_up_price - 0.01 : 0},
-                    {"bestAsk", g_up_price}
-                }},
-                {"DOWN", {
-                    {"bestBid", g_down_price > 0.01 ? g_down_price - 0.01 : 0},
-                    {"bestAsk", g_down_price}
-                }}
-            }}
+            {"orderbooks", orderbooks},
+            {"currentCycle", currentCycle},
+            {"uptime", uptime}
         }}
     };
     
@@ -341,6 +467,23 @@ std::string process_command(const std::string& cmd) {
         if (g_engine_ptr) g_engine_ptr->stop();
         add_log("info", "CMD", "Auto trading DISABLED");
         return "⏹️ Auto trading DISABLED - Bot is paused";
+    }
+    // MODE COMMANDS
+    else if (cmd == "mode live") {
+        if (g_engine_ptr) {
+            g_engine_ptr->set_trading_mode(poly::TradingMode::LIVE);
+            add_log("warn", "MODE", "🔴 LIVE TRADING ENABLED - Real money!");
+            return "🔴 LIVE TRADING ENABLED - Orders will be executed on Polymarket!";
+        }
+        return "❌ Engine not available";
+    }
+    else if (cmd == "mode paper") {
+        if (g_engine_ptr) {
+            g_engine_ptr->set_trading_mode(poly::TradingMode::PAPER);
+            add_log("info", "MODE", "📝 Paper trading mode");
+            return "📝 Paper trading enabled - Simulated trades only";
+        }
+        return "❌ Engine not available";
     }
     // Handle 'set entry X' command
     else if (cmd.rfind("set entry ", 0) == 0) {
@@ -534,24 +677,7 @@ void APIServer::run() {
                           "Content-Type: application/json\r\n\r\n" + cfg.dump();
             }
             else if (base_path == "/api/trades") {
-                nlohmann::json trades_arr = nlohmann::json::array();
-                if (g_engine_ptr) {
-                    auto status = g_engine_ptr->get_status();
-                    for (const auto& t : status.recent_trades) {
-                        trades_arr.push_back({
-                            {"id", t.id},
-                            {"market", t.market_slug},
-                            {"leg", t.leg},
-                            {"side", t.side},
-                            {"shares", t.shares},
-                            {"price", t.price},
-                            {"cost", t.cost},
-                            {"pnl", t.pnl},
-                            {"timestamp", std::chrono::duration_cast<std::chrono::milliseconds>(t.timestamp.time_since_epoch()).count()}
-                        });
-                    }
-                }
-                nlohmann::json trades = {{"success", true}, {"data", trades_arr}};
+                nlohmann::json trades = {{"success", true}, {"data", nlohmann::json::array()}};
                 response = "HTTP/1.1 200 OK\r\n" + cors +
                           "Content-Type: application/json\r\n\r\n" + trades.dump();
             }
@@ -561,12 +687,116 @@ void APIServer::run() {
                           "Content-Type: application/json\r\n\r\n" + cycles.dump();
             }
             else if (base_path == "/api/wallet") {
+                // Check if we have a wallet configured
+                bool has_wallet = false;
+                std::string wallet_address = "";
+                double usdc_balance = 0.0;
+                double matic_balance = 0.0;
+                bool live_available = false;
+                std::string trading_mode = "PAPER";
+                
+                if (g_engine_ptr) {
+                    auto status = g_engine_ptr->get_status();
+                    usdc_balance = status.cash;
+                    live_available = status.live_trading_available;
+                    trading_mode = status.mode;
+                    
+                    // Check environment for wallet
+                    const char* pk = std::getenv("POLYMARKET_PRIVATE_KEY");
+                    if (pk && strlen(pk) > 0) {
+                        has_wallet = true;
+                        // Show partial address (first 6 + last 4 chars of key)
+                        std::string pk_str(pk);
+                        if (pk_str.length() > 10) {
+                            wallet_address = "0x" + pk_str.substr(0, 4) + "..." + pk_str.substr(pk_str.length() - 4);
+                        } else {
+                            wallet_address = "0x...configured";
+                        }
+                    }
+                }
+                
                 nlohmann::json wallet = {
                     {"success", true},
-                    {"data", {{"balance", 1000.0}, {"currency", "USDC"}}}
+                    {"data", {
+                        {"hasWallet", has_wallet},
+                        {"address", has_wallet ? wallet_address : nullptr},
+                        {"balance", {{"usdc", usdc_balance}, {"matic", matic_balance}}},
+                        {"liveAvailable", live_available},
+                        {"tradingMode", trading_mode},
+                        {"canTradeLive", has_wallet && live_available}
+                    }}
                 };
                 response = "HTTP/1.1 200 OK\r\n" + cors +
                           "Content-Type: application/json\r\n\r\n" + wallet.dump();
+            }
+            else if (base_path == "/api/wallet/private-key" && method == "GET") {
+                // Return private key (with auth check already done above)
+                const char* pk = std::getenv("POLYMARKET_PRIVATE_KEY");
+                nlohmann::json resp;
+                if (pk && strlen(pk) > 0) {
+                    resp = {{"success", true}, {"data", {{"privateKey", std::string(pk)}}}};
+                } else {
+                    resp = {{"success", false}, {"error", "No wallet configured"}};
+                }
+                response = "HTTP/1.1 200 OK\r\n" + cors +
+                          "Content-Type: application/json\r\n\r\n" + resp.dump();
+            }
+            else if (base_path == "/api/wallet/generate" && method == "POST") {
+                // Generate new wallet - for now just return info about manual setup
+                nlohmann::json resp = {
+                    {"success", false},
+                    {"error", "Wallet generation must be done manually. Set POLYMARKET_PRIVATE_KEY in .env file."}
+                };
+                response = "HTTP/1.1 200 OK\r\n" + cors +
+                          "Content-Type: application/json\r\n\r\n" + resp.dump();
+            }
+            else if (base_path == "/api/wallet/withdraw" && method == "POST") {
+                // Withdrawal not yet implemented
+                nlohmann::json resp = {
+                    {"success", false},
+                    {"error", "Withdrawal not implemented. Use Polymarket UI to withdraw funds."}
+                };
+                response = "HTTP/1.1 200 OK\r\n" + cors +
+                          "Content-Type: application/json\r\n\r\n" + resp.dump();
+            }
+            else if (base_path == "/api/trading-mode" && method == "POST") {
+                size_t body_start = request.find("\r\n\r\n");
+                if (body_start != std::string::npos) {
+                    std::string body = request.substr(body_start + 4);
+                    try {
+                        auto j = nlohmann::json::parse(body);
+                        std::string mode = j.value("mode", "PAPER");
+                        
+                        nlohmann::json resp;
+                        if (mode == "LIVE") {
+                            // Check if live trading is available
+                            const char* pk = std::getenv("POLYMARKET_PRIVATE_KEY");
+                            if (pk && strlen(pk) > 0) {
+                                if (g_engine_ptr) {
+                                    g_engine_ptr->set_trading_mode(TradingMode::LIVE);
+                                }
+                                add_log("warn", "MODE", "⚠️ LIVE TRADING ENABLED - Real money trades!");
+                                resp = {{"success", true}, {"data", {{"mode", "LIVE"}, {"message", "Live trading enabled!"}}}};
+                            } else {
+                                resp = {{"success", false}, {"error", "Cannot enable live trading: No private key configured"}};
+                            }
+                        } else {
+                            if (g_engine_ptr) {
+                                g_engine_ptr->set_trading_mode(TradingMode::PAPER);
+                            }
+                            add_log("info", "MODE", "Paper trading mode");
+                            resp = {{"success", true}, {"data", {{"mode", "PAPER"}, {"message", "Paper trading mode enabled"}}}};
+                        }
+                        response = "HTTP/1.1 200 OK\r\n" + cors +
+                                  "Content-Type: application/json\r\n\r\n" + resp.dump();
+                    } catch (...) {
+                        response = "HTTP/1.1 400 Bad Request\r\n" + cors +
+                                  "Content-Type: application/json\r\n\r\n"
+                                  "{\"error\":\"Invalid JSON\",\"success\":false}";
+                    }
+                } else {
+                    response = "HTTP/1.1 400 Bad Request\r\n" + cors + "\r\n";
+                }
             }
             else if (base_path == "/api/equity") {
                 // Return equity history (empty for now, just return current equity)
@@ -608,11 +838,6 @@ void APIServer::run() {
         
         close(client);
     }
-}
-
-
-TradingEngine* get_engine_ptr() {
-    return g_engine_ptr;
 }
 
 } // namespace poly

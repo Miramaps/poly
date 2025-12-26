@@ -195,6 +195,20 @@ int main() {
         async_writer.start();
         engine.set_async_writer(&async_writer);
         
+        // Initialize Polymarket client for live trading
+        auto polymarket_client = std::make_shared<poly::PolymarketClient>();
+        polymarket_client->set_executor_path("scripts/order_executor.py");
+        engine.set_polymarket_client(polymarket_client);
+        
+        // Check if live trading is available
+        if (polymarket_client->is_live_trading_available()) {
+            std::cout << "[WALLET] ✓ Live trading credentials detected" << std::endl;
+            poly::add_log("info", "WALLET", "Live trading credentials configured");
+        } else {
+            std::cout << "[WALLET] ℹ️  Paper trading mode (no credentials)" << std::endl;
+            poly::add_log("info", "WALLET", "Paper trading mode - set POLYMARKET_PRIVATE_KEY for live trading");
+        }
+        
         // Initialize WebSocket
         g_ws = std::make_unique<poly::WebSocketPriceStream>();
         g_ws->set_callback(on_price_update);
