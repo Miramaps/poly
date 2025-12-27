@@ -241,44 +241,6 @@ int main() {
         g_ws->start();
         std::cout << "[WS] WebSocket client starting..." << std::endl;
         
-        // Start background orderbook fetcher thread (HTTP, non-blocking)
-        std::atomic<bool> orderbook_running{true};
-        std::thread orderbook_thread([&]() {
-            while (orderbook_running && g_running) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(500));
-                
-                if (!g_up_token.empty() && !g_down_token.empty() && poly::get_engine_ptr()) {
-                    try {
-                        auto up_book = polymarket_client->get_orderbook(g_up_token);
-                        auto down_book = polymarket_client->get_orderbook(g_down_token);
-                        
-                        poly::OrderbookSnapshot up_snapshot;
-                        for (const auto& ask : up_book.asks) {
-                            up_snapshot.asks.push_back({ask.price, ask.size});
-                        }
-                        for (const auto& bid : up_book.bids) {
-                            up_snapshot.bids.push_back({bid.price, bid.size});
-                        }
-                        up_snapshot.timestamp = std::chrono::system_clock::now();
-                        
-                        poly::OrderbookSnapshot down_snapshot;
-                        for (const auto& ask : down_book.asks) {
-                            down_snapshot.asks.push_back({ask.price, ask.size});
-                        }
-                        for (const auto& bid : down_book.bids) {
-                            down_snapshot.bids.push_back({bid.price, bid.size});
-                        }
-                        down_snapshot.timestamp = std::chrono::system_clock::now();
-                        
-                        poly::get_engine_ptr()->on_orderbook_update(g_up_token, up_snapshot);
-                        poly::get_engine_ptr()->on_orderbook_update(g_down_token, down_snapshot);
-                    } catch (...) {
-                        // Silently ignore errors
-                    }
-                }
-            }
-        });
-        
         // Start API server
         g_server = std::make_unique<poly::APIServer>(engine, db, 3001);
         g_server->start();
@@ -552,11 +514,6 @@ int main() {
         }
         
         // Cleanup
-        orderbook_running = false;
-        if (orderbook_thread.joinable()) {
-            orderbook_thread.join();
-        }
-        
         if (g_curl_market) curl_easy_cleanup(g_curl_market);
         curl_global_cleanup();
         
