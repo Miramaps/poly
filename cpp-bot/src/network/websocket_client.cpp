@@ -18,6 +18,10 @@ void WebSocketPriceStream::set_callback(PriceCallback cb) {
     callback_ = std::move(cb);
 }
 
+void WebSocketPriceStream::set_orderbook_callback(OrderbookCallback cb) {
+    orderbook_callback_ = std::move(cb);
+}
+
 void WebSocketPriceStream::subscribe(const std::string& token_id) {
     std::lock_guard<std::mutex> lock(mutex_);
     
@@ -286,32 +290,37 @@ void WebSocketPriceStream::read_loop() {
                         }
                     }
                 }
-                // Handle book update messages
+                // Handle book update messages - FULL ORDERBOOK
                 else if (j.contains("type") && j["type"] == "book" && j.contains("asset_id")) {
-                    PriceUpdate update;
-                    update.token_id = j["asset_id"];
+                    OrderbookUpdate book_update;
+                    book_update.token_id = j["asset_id"];
                     
-                    // Extract best ask from book
-                    if (j.contains("asks") && j["asks"].is_array() && !j["asks"].empty()) {
-                        auto& best_ask = j["asks"][0];
-                        if (best_ask.contains("price")) {
-                            std::string price_str = best_ask["price"].get<std::string>();
-                            update.best_ask = std::stod(price_str);
-                            update.price = update.best_ask;
+                    // Extract ALL asks from book
+                    if (j.contains("asks") && j["asks"].is_array()) {
+                        for (const auto& ask : j["asks"]) {
+                            if (ask.contains("price") && ask.contains("size")) {
+                                double price = std::stod(ask["price"].get<std::string>());
+                                double size = std::stod(ask["size"].get<std::string>());
+                                book_update.asks.push_back({price, size});
+                            }
                         }
                     }
                     
-                    // Extract best bid from book
-                    if (j.contains("bids") && j["bids"].is_array() && !j["bids"].empty()) {
-                        auto& best_bid = j["bids"][0];
-                        if (best_bid.contains("price")) {
-                            std::string price_str = best_bid["price"].get<std::string>();
-                            update.best_bid = std::stod(price_str);
+                    // Extract ALL bids from book
+                    if (j.contains("bids") && j["bids"].is_array()) {
+                        for (const auto& bid : j["bids"]) {
+                            if (bid.contains("price") && bid.contains("size")) {
+                                double price = std::stod(bid["price"].get<std::string>());
+                                double size = std::stod(bid["size"].get<std::string>());
+                                book_update.bids.push_back({price, size});
+                            }
                         }
                     }
                     
-                    if (update.price > 0 && callback_) {
-                        callback_(update);
+                    if (!book_update.asks.empty() || !book_update.bids.empty()) {
+                        if (orderbook_callback_) {
+                            orderbook_callback_(book_update);
+                        }
                     }
                 }
                 // Handle last_trade_price updates

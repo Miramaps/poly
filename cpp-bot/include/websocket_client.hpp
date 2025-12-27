@@ -31,14 +31,27 @@ struct PriceUpdate {
     uint64_t timestamp = 0;
 };
 
+struct OrderbookLevel {
+    double price;
+    double size;
+};
+
+struct OrderbookUpdate {
+    std::string token_id;
+    std::vector<OrderbookLevel> bids;
+    std::vector<OrderbookLevel> asks;
+};
+
 class WebSocketPriceStream {
 public:
     using PriceCallback = std::function<void(const PriceUpdate& update)>;
+    using OrderbookCallback = std::function<void(const OrderbookUpdate& update)>;
     
     WebSocketPriceStream();
     ~WebSocketPriceStream();
     
     void set_callback(PriceCallback cb);
+    void set_orderbook_callback(OrderbookCallback cb);
     void subscribe(const std::string& token_id);
     void unsubscribe(const std::string& token_id);
     void clear_subscriptions();
@@ -65,6 +78,7 @@ private:
     std::thread worker_thread_;
     
     PriceCallback callback_;
+    OrderbookCallback orderbook_callback_;
     std::vector<std::string> subscribed_tokens_;
     std::mutex mutex_;
 };

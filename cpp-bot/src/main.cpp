@@ -225,6 +225,23 @@ int main() {
         // Initialize WebSocket
         g_ws = std::make_unique<poly::WebSocketPriceStream>();
         g_ws->set_callback(on_price_update);
+        
+        // Set orderbook callback for full depth updates
+        g_ws->set_orderbook_callback([](const poly::OrderbookUpdate& update) {
+            if (!poly::get_engine_ptr()) return;
+            
+            poly::OrderbookSnapshot snapshot;
+            for (const auto& ask : update.asks) {
+                snapshot.asks.push_back({ask.price, ask.size});
+            }
+            for (const auto& bid : update.bids) {
+                snapshot.bids.push_back({bid.price, bid.size});
+            }
+            snapshot.timestamp = std::chrono::system_clock::now();
+            
+            poly::get_engine_ptr()->on_orderbook_update(update.token_id, snapshot);
+        });
+        
         g_ws->start();
         std::cout << "[WS] WebSocket client starting..." << std::endl;
         
@@ -237,9 +254,7 @@ int main() {
         
     std::string current_slug;
         int64_t current_window_ts = 0;
-        int log_counter = 0;
         auto last_log_time = std::chrono::steady_clock::now();
-        auto last_orderbook_fetch = std::chrono::steady_clock::now();
         
         // Pre-fetched next market tokens
         std::string next_up_token;
@@ -391,46 +406,6 @@ int main() {
                 std::cout << "[MARKET] Switch completed in " << switch_ms << "ms" << std::endl;
                 poly::add_log("info", "MARKET", "Switch completed in " + std::to_string(switch_ms) + "ms");
                 std::cout << "[MARKET] ═══════════════════════════════════════\n" << std::endl;
-            }
-            
-            // Fetch live orderbooks every 500ms for real-time data
-            auto now_ob = std::chrono::steady_clock::now();
-            if (std::chrono::duration_cast<std::chrono::milliseconds>(now_ob - last_orderbook_fetch).count() >= 500) {
-                last_orderbook_fetch = now_ob;
-                
-                // Fetch orderbooks via HTTP API
-                if (!g_up_token.empty() && !g_down_token.empty()) {
-                    try {
-                        auto up_book = polymarket_client->get_orderbook(g_up_token);
-                        auto down_book = polymarket_client->get_orderbook(g_down_token);
-                        
-                        // Update engine with real orderbooks
-                        if (poly::get_engine_ptr()) {
-                            poly::OrderbookSnapshot up_snapshot;
-                            for (const auto& ask : up_book.asks) {
-                                up_snapshot.asks.push_back({ask.price, ask.size});
-                            }
-                            for (const auto& bid : up_book.bids) {
-                                up_snapshot.bids.push_back({bid.price, bid.size});
-                            }
-                            up_snapshot.timestamp = std::chrono::system_clock::now();
-                            
-                            poly::OrderbookSnapshot down_snapshot;
-                            for (const auto& ask : down_book.asks) {
-                                down_snapshot.asks.push_back({ask.price, ask.size});
-                            }
-                            for (const auto& bid : down_book.bids) {
-                                down_snapshot.bids.push_back({bid.price, bid.size});
-                            }
-                            down_snapshot.timestamp = std::chrono::system_clock::now();
-                            
-                            poly::get_engine_ptr()->on_orderbook_update(g_up_token, up_snapshot);
-                            poly::get_engine_ptr()->on_orderbook_update(g_down_token, down_snapshot);
-                        }
-                    } catch (const std::exception& e) {
-                        // Silently ignore orderbook fetch errors
-                    }
-                }
             }
             
             // Log prices every second
