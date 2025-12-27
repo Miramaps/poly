@@ -265,22 +265,14 @@ int main() {
             int64_t ms_until_switch = get_ms_until_next_window();
             
             // PRECISE TIMING: Sleep until exactly when we need to act
+            // FAST loop - 50ms for real-time dashboard updates
             int sleep_ms;
             if (ms_until_switch <= 1) {
-                // Window switch imminent - no sleep, act now!
-                sleep_ms = 0;
+                sleep_ms = 0;  // Window switch imminent
             } else if (ms_until_switch <= 100) {
-                // Within 100ms of switch - sleep 1ms for precision
-                sleep_ms = 1;
-            } else if (time_left <= 20) {
-                // Pre-fetch zone (last 20 seconds) - check every 100ms
-                sleep_ms = 100;
-            } else if (time_left <= 60) {
-                // Near end - check every 500ms
-                sleep_ms = 500;
+                sleep_ms = 1;  // Within 100ms of switch - precision mode
             } else {
-                // Normal operation - check every second
-                sleep_ms = 1000;
+                sleep_ms = 50; // Normal operation - 20 updates/second for real-time feel
             }
             
             if (sleep_ms > 0) {
