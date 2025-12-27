@@ -705,12 +705,60 @@ void APIServer::run() {
                           "Content-Type: application/json\r\n\r\n" + cfg.dump();
             }
             else if (base_path == "/api/trades") {
-                nlohmann::json trades = {{"success", true}, {"data", nlohmann::json::array()}};
+                nlohmann::json trades_data = nlohmann::json::array();
+                
+                if (g_engine_ptr) {
+                    auto status = g_engine_ptr->get_status();
+                    for (const auto& trade : status.recent_trades) {
+                        nlohmann::json t;
+                        t["id"] = trade.id;
+                        t["market_slug"] = trade.market_slug;
+                        t["leg"] = trade.leg;
+                        t["side"] = trade.side;
+                        t["token_id"] = trade.token_id;
+                        t["shares"] = trade.shares;
+                        t["price"] = trade.price;
+                        t["cost"] = trade.cost;
+                        t["fee"] = trade.fee;
+                        t["cash_after"] = trade.cash_after;
+                        t["timestamp"] = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            trade.timestamp.time_since_epoch()).count();
+                        trades_data.push_back(t);
+                    }
+                }
+                
+                nlohmann::json trades = {{"success", true}, {"data", trades_data}};
                 response = "HTTP/1.1 200 OK\r\n" + cors +
                           "Content-Type: application/json\r\n\r\n" + trades.dump();
             }
             else if (base_path == "/api/cycles") {
-                nlohmann::json cycles = {{"success", true}, {"data", nlohmann::json::array()}};
+                nlohmann::json cycles_data = nlohmann::json::array();
+                
+                if (g_engine_ptr) {
+                    auto status = g_engine_ptr->get_status();
+                    // Return completed cycles (derived from trade pairs)
+                    // Group trades by cycle: every 2 trades = 1 cycle
+                    for (size_t i = 0; i + 1 < status.recent_trades.size(); i += 2) {
+                        const auto& leg1 = status.recent_trades[i];
+                        const auto& leg2 = status.recent_trades[i + 1];
+                        
+                        nlohmann::json c;
+                        c["market_slug"] = leg1.market_slug;
+                        c["leg1_side"] = leg1.side;
+                        c["leg1_price"] = leg1.price;
+                        c["leg1_shares"] = leg1.shares;
+                        c["leg2_side"] = leg2.side;
+                        c["leg2_price"] = leg2.price;
+                        c["leg2_shares"] = leg2.shares;
+                        c["sum"] = leg1.price + leg2.price;
+                        c["pnl"] = (1.0 - (leg1.price + leg2.price)) * leg1.shares;
+                        c["timestamp"] = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            leg2.timestamp.time_since_epoch()).count();
+                        cycles_data.push_back(c);
+                    }
+                }
+                
+                nlohmann::json cycles = {{"success", true}, {"data", cycles_data}};
                 response = "HTTP/1.1 200 OK\r\n" + cors +
                           "Content-Type: application/json\r\n\r\n" + cycles.dump();
             }
