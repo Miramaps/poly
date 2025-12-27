@@ -409,21 +409,31 @@ std::string get_logs_json() {
 std::string process_command(const std::string& cmd) {
     if (cmd == "help") {
         add_log("info", "CMD", "help - showing commands");
-        return "=== POLY TRADER C++ COMMANDS ===\n\n"
-               "STATUS:\n"
-               "  help          - Show this help\n"
-               "  status        - Bot status & prices\n"
-               "  config        - Show current config\n\n"
-               "TRADING:\n"
-               "  auto on       - Enable auto trading\n"
-               "  auto off      - Disable auto trading\n\n"
-               "CONFIG CHANGES:\n"
-               "  set entry <$> - Set entry threshold (e.g. 'set entry 0.36')\n"
-               "  set shares <n>- Set shares per trade (e.g. 'set shares 10')\n"
-               "  set sum <$>   - Set sum target (e.g. 'set sum 0.99')\n"
-               "  set dca on    - Enable DCA\n"
-               "  set dca off   - Disable DCA\n"
-               "  set window <s>- Set trading window seconds (e.g. 'set window 120')";
+        return 
+            "╔══════════════════════════════════════════════════════════════╗\n"
+            "║           ⚡ POLY TRADER C++ ⚡                              ║\n"
+            "╠══════════════════════════════════════════════════════════════╣\n"
+            "║                                                              ║\n"
+            "║  📊 STATUS                                                   ║\n"
+            "║  ─────────────────────────────────────────────────────────   ║\n"
+            "║  help              Show this help menu                       ║\n"
+            "║  status            Bot status, prices & P&L                  ║\n"
+            "║  config            Current configuration                     ║\n"
+            "║                                                              ║\n"
+            "║  🤖 TRADING                                                  ║\n"
+            "║  ─────────────────────────────────────────────────────────   ║\n"
+            "║  auto on           Enable auto trading                       ║\n"
+            "║  auto off          Disable auto trading                      ║\n"
+            "║                                                              ║\n"
+            "║  ⚙️  CONFIGURATION                                           ║\n"
+            "║  ─────────────────────────────────────────────────────────   ║\n"
+            "║  set entry <$>     Entry threshold    (e.g. set entry 0.36)  ║\n"
+            "║  set shares <n>    Shares per trade   (e.g. set shares 10)   ║\n"
+            "║  set sum <$>       Sum target         (e.g. set sum 0.99)    ║\n"
+            "║  set window <s>    Trading window     (e.g. set window 120)  ║\n"
+            "║  set dca on/off    Toggle DCA mode                           ║\n"
+            "║                                                              ║\n"
+            "╚══════════════════════════════════════════════════════════════╝";
     }
     else if (cmd == "status") {
         add_log("info", "CMD", "status - showing bot status");
@@ -438,15 +448,31 @@ std::string process_command(const std::string& cmd) {
             realized_pnl = status.realized_pnl;
         }
         
-        oss << "=== BOT STATUS ===\n"
-            << "Mode: PAPER TRADING\n"
-            << "Auto: " << (g_auto_enabled.load() ? "ON" : "OFF") << "\n"
-            << "Market: " << g_market_slug << "\n"
-            << "UP: $" << std::fixed << std::setprecision(4) << g_up_price << "\n"
-            << "DOWN: $" << std::fixed << std::setprecision(4) << g_down_price << "\n"
-            << "Sum: $" << std::fixed << std::setprecision(4) << (g_up_price + g_down_price) << "\n"
-            << "Cash: $" << std::fixed << std::setprecision(2) << cash << "\n"
-            << "Realized P&L: $" << std::fixed << std::setprecision(2) << realized_pnl;
+        std::string auto_status = g_auto_enabled.load() ? "🟢 ON" : "🔴 OFF";
+        double sum = g_up_price + g_down_price;
+        std::string pnl_color = realized_pnl >= 0 ? "+" : "";
+        
+        oss << "╔══════════════════════════════════════════════╗\n"
+            << "║           📊 BOT STATUS                      ║\n"
+            << "╠══════════════════════════════════════════════╣\n"
+            << "║                                              ║\n"
+            << "║  Mode      PAPER TRADING                     ║\n"
+            << "║  Auto      " << auto_status << std::string(33 - auto_status.length() + 4, ' ') << "║\n"
+            << "║                                              ║\n"
+            << "║  📈 PRICES                                   ║\n"
+            << "║  ──────────────────────────────────────────  ║\n"
+            << "║  ▲ UP      $" << std::fixed << std::setprecision(4) << g_up_price << std::string(30, ' ') << "║\n"
+            << "║  ▼ DOWN    $" << std::fixed << std::setprecision(4) << g_down_price << std::string(30, ' ') << "║\n"
+            << "║  Σ SUM     $" << std::fixed << std::setprecision(4) << sum << std::string(30, ' ') << "║\n"
+            << "║                                              ║\n"
+            << "║  💰 PORTFOLIO                                ║\n"
+            << "║  ──────────────────────────────────────────  ║\n"
+            << "║  Cash      $" << std::fixed << std::setprecision(2) << cash << std::string(30, ' ') << "║\n"
+            << "║  P&L       " << pnl_color << "$" << std::fixed << std::setprecision(2) << realized_pnl << std::string(30, ' ') << "║\n"
+            << "║                                              ║\n"
+            << "║  Market    " << g_market_slug.substr(0, 30) << std::string(std::max(0, 33 - (int)g_market_slug.length()), ' ') << "║\n"
+            << "║                                              ║\n"
+            << "╚══════════════════════════════════════════════╝";
         return oss.str();
     }
     else if (cmd == "config") {
@@ -455,21 +481,40 @@ std::string process_command(const std::string& cmd) {
         
         if (g_engine_ptr) {
             auto cfg = g_engine_ptr->get_config();
-            oss << "=== CONFIG ===\n"
-                << "Entry Threshold: $" << std::fixed << std::setprecision(2) << cfg.move << "\n"
-                << "Shares: " << cfg.shares << "\n"
-                << "Sum Target: $" << std::fixed << std::setprecision(2) << cfg.sum_target << "\n"
-                << "DCA: " << (cfg.dca_enabled ? "ON" : "OFF") << "\n"
-                << "Breakeven Exit: " << (cfg.breakeven_enabled ? "ON" : "OFF") << "\n"
-                << "Trading Window: " << cfg.dump_window_sec << "s";
+            std::string dca_status = cfg.dca_enabled ? "🟢 ON" : "🔴 OFF";
+            std::string breakeven_status = cfg.breakeven_enabled ? "🟢 ON" : "🔴 OFF";
+            
+            oss << "╔══════════════════════════════════════════════╗\n"
+                << "║           ⚙️  CONFIGURATION                  ║\n"
+                << "╠══════════════════════════════════════════════╣\n"
+                << "║                                              ║\n"
+                << "║  🎯 ENTRY                                    ║\n"
+                << "║  ──────────────────────────────────────────  ║\n"
+                << "║  Threshold     $" << std::fixed << std::setprecision(2) << cfg.move << std::string(26, ' ') << "║\n"
+                << "║  Shares        " << cfg.shares << std::string(28, ' ') << "║\n"
+                << "║  Sum Target    $" << std::fixed << std::setprecision(2) << cfg.sum_target << std::string(26, ' ') << "║\n"
+                << "║                                              ║\n"
+                << "║  ⏱️  TIMING                                   ║\n"
+                << "║  ──────────────────────────────────────────  ║\n"
+                << "║  Window        " << cfg.dump_window_sec << "s (last " << cfg.dump_window_sec << "s of 15min)" << std::string(10, ' ') << "║\n"
+                << "║                                              ║\n"
+                << "║  🔧 FEATURES                                 ║\n"
+                << "║  ──────────────────────────────────────────  ║\n"
+                << "║  DCA Mode      " << dca_status << std::string(26, ' ') << "║\n"
+                << "║  Breakeven     " << breakeven_status << std::string(26, ' ') << "║\n"
+                << "║                                              ║\n"
+                << "╚══════════════════════════════════════════════╝";
         } else {
-            oss << "=== CONFIG ===\n"
-                << "Entry Threshold: $0.36\n"
-                << "Shares: 10\n"
-                << "Sum Target: $0.99\n"
-                << "DCA: ON\n"
-                << "Breakeven Exit: ON\n"
-                << "Trading Window: 120s";
+            oss << "╔══════════════════════════════════════════════╗\n"
+                << "║           ⚙️  CONFIGURATION                  ║\n"
+                << "╠══════════════════════════════════════════════╣\n"
+                << "║  Threshold     $0.36                         ║\n"
+                << "║  Shares        10                            ║\n"
+                << "║  Sum Target    $0.99                         ║\n"
+                << "║  Window        120s                          ║\n"
+                << "║  DCA Mode      🟢 ON                         ║\n"
+                << "║  Breakeven     🟢 ON                         ║\n"
+                << "╚══════════════════════════════════════════════╝";
         }
         return oss.str();
     }
