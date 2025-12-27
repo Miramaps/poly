@@ -428,10 +428,13 @@ int main() {
                     }
                 }
                 
-                // Log WebSocket status
-                if (!g_ws->is_connected()) {
+                // Log WebSocket status (only log once per disconnect)
+                static bool was_connected = true;
+                bool is_connected = g_ws->is_connected();
+                if (!is_connected && was_connected) {
                     poly::add_log("warn", "WS", "WebSocket disconnected - reconnecting...");
                 }
+                was_connected = is_connected;
             }
 
             // Broadcast FULL status to dashboard WebSocket every 50ms (INSTANT updates)

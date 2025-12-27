@@ -153,13 +153,29 @@ void WebSocketPriceStream::connect() {
     // SSL handshake
     ws_->next_layer().handshake(ssl::stream_base::client);
     
-    // Set WebSocket options
-    ws_->set_option(websocket::stream_base::timeout::suggested(beast::role_type::client));
+    // Set WebSocket options with aggressive keepalive
+    websocket::stream_base::timeout opt{
+        std::chrono::seconds(30),   // handshake timeout
+        std::chrono::seconds(300),  // idle timeout (5 minutes - server pings us)
+        true                        // enable ping/pong keepalive
+    };
+    ws_->set_option(opt);
     ws_->set_option(websocket::stream_base::decorator(
         [](websocket::request_type& req) {
             req.set(http::field::user_agent, "PolyTrader/1.0");
         }
     ));
+    
+    // Control callback for ping/pong
+    ws_->control_callback(
+        [](websocket::frame_type kind, beast::string_view payload) {
+            if (kind == websocket::frame_type::pong) {
+                // Received pong - connection alive
+            } else if (kind == websocket::frame_type::ping) {
+                // Server pinged us - pong is auto-sent
+            }
+        }
+    );
     
     // WebSocket handshake
     std::string ws_host = host + ":" + std::to_string(ep.port());
@@ -454,15 +470,13 @@ void WebSocketPriceStream::read_loop() {
             }
             
         } catch (const beast::system_error& e) {
-            if (e.code() != websocket::error::closed) {
-                std::cerr << "[WS] Read error: " << e.what() << std::endl;
-            }
+            std::cerr << "[WS] Read error: " << e.what() << " (code: " << e.code().value() << ")" << std::endl;
             break;
         }
     }
     
     connected_ = false;
-    std::cout << "[WS] Disconnected" << std::endl;
+    std::cout << "[WS] Disconnected after " << msg_count << " messages" << std::endl;
 }
 
 } // namespace poly
