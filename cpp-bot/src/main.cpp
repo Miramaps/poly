@@ -140,14 +140,22 @@ namespace {
             s_up_price = ask;
             g_up_price.store(ask);
             matched = true;
+            if (callback_count <= 20) {
+                std::cout << "[PRICE] UP matched: $" << ask << std::endl;
+            }
         } else if (update.token_id == g_down_token) {
             s_down_price = ask;
             g_down_price.store(ask);
             matched = true;
+            if (callback_count <= 20) {
+                std::cout << "[PRICE] DOWN matched: $" << ask << std::endl;
+            }
         }
         
-        // Update the API server with latest prices
-        set_live_prices(s_up_price, s_down_price);
+        // Update the API server with latest prices (only when matched)
+        if (matched) {
+            set_live_prices(s_up_price, s_down_price);
+        }
         
         // Call trading engine with orderbook snapshot
         if (poly::get_engine_ptr() && matched && ask > 0) {
