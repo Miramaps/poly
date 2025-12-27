@@ -277,18 +277,22 @@ std::string get_status_json() {
             
             // UP orderbook
             for (const auto& [price, size] : status.up_orderbook.asks) {
-                orderbooks["UP"]["asks"].push_back({{"price", price}, {"size", size}});
+                nlohmann::json level = {{"price", price}, {"size", size}};
+                orderbooks["UP"]["asks"].push_back(level);
             }
             for (const auto& [price, size] : status.up_orderbook.bids) {
-                orderbooks["UP"]["bids"].push_back({{"price", price}, {"size", size}});
+                nlohmann::json level = {{"price", price}, {"size", size}};
+                orderbooks["UP"]["bids"].push_back(level);
             }
             
             // DOWN orderbook
             for (const auto& [price, size] : status.down_orderbook.asks) {
-                orderbooks["DOWN"]["asks"].push_back({{"price", price}, {"size", size}});
+                nlohmann::json level = {{"price", price}, {"size", size}};
+                orderbooks["DOWN"]["asks"].push_back(level);
             }
             for (const auto& [price, size] : status.down_orderbook.bids) {
-                orderbooks["DOWN"]["bids"].push_back({{"price", price}, {"size", size}});
+                nlohmann::json level = {{"price", price}, {"size", size}};
+                orderbooks["DOWN"]["bids"].push_back(level);
             }
         }
     }
