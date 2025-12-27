@@ -25,10 +25,10 @@ using tcp = boost::asio::ip::tcp;
 
 struct PriceUpdate {
     std::string token_id;
-    double price;
-    double best_bid;
-    double best_ask;
-    uint64_t timestamp;
+    double price = 0.0;
+    double best_bid = 0.0;
+    double best_ask = 0.0;
+    uint64_t timestamp = 0;
 };
 
 class WebSocketPriceStream {
