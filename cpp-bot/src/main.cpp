@@ -334,8 +334,15 @@ int main() {
                 
                 // Use pre-fetched tokens if available
                 if (next_tokens_ready && next_slug == current_slug) {
+                    // Clear ALL subscriptions first (removes old market tokens)
+                    g_ws->clear_subscriptions();
+                    
                     g_up_token = next_up_token;
                     g_down_token = next_down_token;
+                    
+                    // Re-subscribe to new tokens (forces fresh orderbook request)
+                    g_ws->subscribe(g_up_token);
+                    g_ws->subscribe(g_down_token);
                     
                     engine.set_market(current_slug, g_up_token, g_down_token);
                     poly::set_market_info(current_slug, next_question);
@@ -343,11 +350,6 @@ int main() {
                     std::cout << "[MARKET] ✓ Using pre-fetched tokens (INSTANT)" << std::endl;
                     std::cout << "[TOKENS] UP:   " << g_up_token.substr(0,24) << "..." << std::endl;
                     std::cout << "[TOKENS] DOWN: " << g_down_token.substr(0,24) << "..." << std::endl;
-                    
-                    // Already subscribed via pre-fetch, no reconnect needed!
-                    
-                    // Clear old subscriptions (keep new ones)
-                    // Note: We don't call clear_subscriptions() because we want to keep new tokens
                     
                 } else {
                     // Fallback: fetch tokens now (slower path)
