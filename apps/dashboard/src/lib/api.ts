@@ -1,5 +1,5 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3001';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://18.175.223.104:3001';
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://18.175.223.104:3002';
 
 // Base64 encode that works in both browser and Node
 function base64Encode(str: string): string {
@@ -82,7 +82,7 @@ export async function getWallet() {
   return fetchApi<{ success: boolean; data: {
     hasWallet: boolean;
     address: string | null;
-    balance: { usdc: number; matic: number };
+    balance: { usdc: number; matic: number; pol?: number };
     canGenerateNew: boolean;
   } }>('/api/wallet');
 }

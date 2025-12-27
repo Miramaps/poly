@@ -82,7 +82,7 @@ export async function getWallet() {
   return fetchApi<{ success: boolean; data: {
     hasWallet: boolean;
     address: string | null;
-    balance: { usdc: number; matic: number };
+    balance: { usdc: number; matic: number; pol?: number };
     canGenerateNew: boolean;
   } }>('/api/wallet');
 }
