@@ -226,13 +226,42 @@ int main() {
         std::string next_question;
         bool next_tokens_ready = false;
         
+        // Calculate exact time until next window
+        auto get_ms_until_next_window = []() -> int64_t {
+            auto now = std::chrono::system_clock::now();
+            auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+            int64_t window_ms = 900 * 1000; // 15 minutes in ms
+            int64_t ms_into_window = now_ms % window_ms;
+            return window_ms - ms_into_window;
+        };
+        
         while (g_running) {
             int secs_in_window = get_seconds_into_window();
             int time_left = 900 - secs_in_window;
+            int64_t ms_until_switch = get_ms_until_next_window();
             
-            // Fast polling (10ms) in last 30 seconds, normal (50ms) otherwise
-            int sleep_ms = (time_left <= 30) ? 10 : 50;
-            std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+            // PRECISE TIMING: Sleep until exactly when we need to act
+            int sleep_ms;
+            if (ms_until_switch <= 1) {
+                // Window switch imminent - no sleep, act now!
+                sleep_ms = 0;
+            } else if (ms_until_switch <= 100) {
+                // Within 100ms of switch - sleep 1ms for precision
+                sleep_ms = 1;
+            } else if (time_left <= 20) {
+                // Pre-fetch zone (last 20 seconds) - check every 100ms
+                sleep_ms = 100;
+            } else if (time_left <= 60) {
+                // Near end - check every 500ms
+                sleep_ms = 500;
+            } else {
+                // Normal operation - check every second
+                sleep_ms = 1000;
+            }
+            
+            if (sleep_ms > 0) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+            }
             
             int64_t window_ts = get_current_window_timestamp();
             
@@ -276,9 +305,16 @@ int main() {
                 
                 auto switch_start = std::chrono::high_resolution_clock::now();
                 
-                poly::add_log("info", "MARKET", "⚡ INSTANT SWITCH to: " + current_slug);
+                // Calculate how late we are (ms after the exact window start)
+                auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count();
+                int64_t window_start_ms = window_ts * 1000;
+                int64_t latency_ms = now_ms - window_start_ms;
+                
                 std::cout << "\n[MARKET] ═══════════════════════════════════════" << std::endl;
-                std::cout << "[MARKET] ⚡ INSTANT SWITCH: " << current_slug << std::endl;
+                std::cout << "[MARKET] ⚡ SWITCH DETECTED (latency: " << latency_ms << "ms)" << std::endl;
+                std::cout << "[MARKET] New market: " << current_slug << std::endl;
+                poly::add_log("info", "MARKET", "⚡ SWITCH (latency: " + std::to_string(latency_ms) + "ms) " + current_slug);
                 
                 // Use pre-fetched tokens if available
                 if (next_tokens_ready && next_slug == current_slug) {
