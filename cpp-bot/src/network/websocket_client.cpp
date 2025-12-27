@@ -27,7 +27,9 @@ void WebSocketPriceStream::subscribe(const std::string& token_id) {
     }
     
     subscribed_tokens_.push_back(token_id);
-    if (connected_) {
+    
+    // Send immediately if connected (for instant market switching)
+    if (connected_ && ws_) {
         send_subscribe(token_id);
     }
 }
@@ -46,12 +48,8 @@ void WebSocketPriceStream::unsubscribe(const std::string& token_id) {
 
 void WebSocketPriceStream::clear_subscriptions() {
     std::lock_guard<std::mutex> lock(mutex_);
-    
-    if (connected_) {
-        for (const auto& token : subscribed_tokens_) {
-            send_unsubscribe(token);
-        }
-    }
+    // Just clear the list - don't send unsubscribe (thread safety)
+    // The reconnect will establish fresh subscriptions
     subscribed_tokens_.clear();
 }
 

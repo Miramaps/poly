@@ -219,50 +219,120 @@ int main() {
         int log_counter = 0;
         auto last_log_time = std::chrono::steady_clock::now();
         
+        // Pre-fetched next market tokens
+        std::string next_up_token;
+        std::string next_down_token;
+        std::string next_slug;
+        std::string next_question;
+        bool next_tokens_ready = false;
+        
         while (g_running) {
-            // Check every 100ms for market changes and logging
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            int secs_in_window = get_seconds_into_window();
+            int time_left = 900 - secs_in_window;
+            
+            // Fast polling (10ms) in last 30 seconds, normal (50ms) otherwise
+            int sleep_ms = (time_left <= 30) ? 10 : 50;
+            std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
             
             int64_t window_ts = get_current_window_timestamp();
+            
+            // PRE-FETCH: 20 seconds before window ends, fetch next market tokens
+            if (time_left <= 20 && time_left > 0 && !next_tokens_ready) {
+                int64_t next_window_ts = window_ts + 900;
+                next_slug = generate_market_slug(next_window_ts);
+                
+                std::cout << "[PRE-FETCH] Fetching next market: " << next_slug << std::endl;
+                poly::add_log("info", "PRE-FETCH", "Fetching next market: " + next_slug);
+                
+                // Store current tokens
+                std::string old_up = g_up_token;
+                std::string old_down = g_down_token;
+                
+                if (fetch_market_tokens(next_slug, next_question)) {
+                    next_up_token = g_up_token;
+                    next_down_token = g_down_token;
+                    next_tokens_ready = true;
+                    
+                    // Restore current tokens
+                    g_up_token = old_up;
+                    g_down_token = old_down;
+                    
+                    std::cout << "[PRE-FETCH] ✓ Ready: " << next_question << std::endl;
+                    poly::add_log("info", "PRE-FETCH", "✓ Next market tokens ready");
+                    
+                    // Pre-subscribe to next market tokens (WebSocket will start receiving)
+                    g_ws->subscribe(next_up_token);
+                    g_ws->subscribe(next_down_token);
+                    std::cout << "[PRE-FETCH] ✓ Pre-subscribed to next market tokens" << std::endl;
+                } else {
+                    std::cerr << "[PRE-FETCH] Failed to fetch next market" << std::endl;
+                }
+            }
             
             // Check for new market window
             if (window_ts != current_window_ts) {
                 current_window_ts = window_ts;
                 current_slug = generate_market_slug(window_ts);
                 
-                poly::add_log("info", "MARKET", "Switching to: " + current_slug);
-                std::cout << "\n[MARKET] ═══════════════════════════════════════" << std::endl;
-                std::cout << "[MARKET] Switching to: " << current_slug << std::endl;
+                auto switch_start = std::chrono::high_resolution_clock::now();
                 
-                std::string question;
-                if (fetch_market_tokens(current_slug, question)) {
+                poly::add_log("info", "MARKET", "⚡ INSTANT SWITCH to: " + current_slug);
+                std::cout << "\n[MARKET] ═══════════════════════════════════════" << std::endl;
+                std::cout << "[MARKET] ⚡ INSTANT SWITCH: " << current_slug << std::endl;
+                
+                // Use pre-fetched tokens if available
+                if (next_tokens_ready && next_slug == current_slug) {
+                    g_up_token = next_up_token;
+                    g_down_token = next_down_token;
+                    
                     engine.set_market(current_slug, g_up_token, g_down_token);
-                    poly::set_market_info(current_slug, question);
-                    poly::add_log("info", "MARKET", "Loaded: " + question);
-                    std::cout << "[MARKET] " << question << std::endl;
+                    poly::set_market_info(current_slug, next_question);
+                    
+                    std::cout << "[MARKET] ✓ Using pre-fetched tokens (INSTANT)" << std::endl;
                     std::cout << "[TOKENS] UP:   " << g_up_token.substr(0,24) << "..." << std::endl;
                     std::cout << "[TOKENS] DOWN: " << g_down_token.substr(0,24) << "..." << std::endl;
                     
-                    // Force reconnect with new subscriptions
-                    // (WebSocket read/write not thread-safe, reconnect is cleaner)
-                    g_ws->clear_subscriptions();
-                    g_ws->subscribe(g_up_token);
-                    g_ws->subscribe(g_down_token);
-                    g_ws->reconnect();  // Force fresh connection with new subscriptions
+                    // Already subscribed via pre-fetch, no reconnect needed!
                     
-                    // Reset prices for new market
-                    s_up_price = 0.0;
-                    s_down_price = 0.0;
-                    g_up_price.store(0.0);
-                    g_down_price.store(0.0);
+                    // Clear old subscriptions (keep new ones)
+                    // Note: We don't call clear_subscriptions() because we want to keep new tokens
                     
-                    poly::add_log("info", "MARKET", "Prices reset, waiting for new market prices...");
-                    
-                    std::cout << "[MARKET] ═══════════════════════════════════════\n" << std::endl;
                 } else {
-                    poly::add_log("error", "MARKET", "Failed to load market");
-                    std::cerr << "[MARKET] Failed to load market" << std::endl;
+                    // Fallback: fetch tokens now (slower path)
+                    std::cout << "[MARKET] ⚠️  No pre-fetch, fetching now..." << std::endl;
+                    std::string question;
+                    if (fetch_market_tokens(current_slug, question)) {
+                        engine.set_market(current_slug, g_up_token, g_down_token);
+                        poly::set_market_info(current_slug, question);
+                        
+                        // Subscribe immediately (will send on existing connection)
+                        g_ws->clear_subscriptions();
+                        g_ws->subscribe(g_up_token);
+                        g_ws->subscribe(g_down_token);
+                        
+                        std::cout << "[TOKENS] UP:   " << g_up_token.substr(0,24) << "..." << std::endl;
+                        std::cout << "[TOKENS] DOWN: " << g_down_token.substr(0,24) << "..." << std::endl;
+                    } else {
+                        poly::add_log("error", "MARKET", "Failed to load market");
+                        std::cerr << "[MARKET] Failed to load market" << std::endl;
+                    }
                 }
+                
+                // Reset prices for new market
+                s_up_price = 0.0;
+                s_down_price = 0.0;
+                g_up_price.store(0.0);
+                g_down_price.store(0.0);
+                
+                // Reset pre-fetch state
+                next_tokens_ready = false;
+                
+                auto switch_end = std::chrono::high_resolution_clock::now();
+                auto switch_ms = std::chrono::duration_cast<std::chrono::milliseconds>(switch_end - switch_start).count();
+                
+                std::cout << "[MARKET] Switch completed in " << switch_ms << "ms" << std::endl;
+                poly::add_log("info", "MARKET", "Switch completed in " + std::to_string(switch_ms) + "ms");
+                std::cout << "[MARKET] ═══════════════════════════════════════\n" << std::endl;
             }
             
             // Log prices every second
