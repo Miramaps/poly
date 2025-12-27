@@ -18,19 +18,18 @@ export default function DashboardPage() {
   const [equityHistory, setEquityHistory] = useState<any[]>([]);
   const [initialStatus, setInitialStatus] = useState<any>(null);
   const [tradingMode, setTradingMode] = useState<'PAPER' | 'LIVE'>('PAPER');
-  const [polledLogs, setPolledLogs] = useState<any[]>([]);
+  // polledLogs removed - using WebSocket logs only
 
+  // ONLY fetch initial data ONCE - WebSocket handles all real-time updates!
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchInitialData = async () => {
       try {
-        const [equityRes, statusRes, logsRes] = await Promise.all([
+        const [equityRes, statusRes] = await Promise.all([
           getEquity(500),
           getStatus(),
-          getLogs(100),
         ]);
         setEquityHistory(equityRes.data || []);
         setInitialStatus(statusRes.data);
-        setPolledLogs(logsRes.data || []);
         if (statusRes.data?.bot?.tradingMode) {
           setTradingMode(statusRes.data.bot.tradingMode);
         }
@@ -38,25 +37,8 @@ export default function DashboardPage() {
         console.error('Failed to fetch initial data:', err);
       }
     };
-    fetchData();
-    
-    const pollInterval = setInterval(async () => {
-      try {
-        const [statusRes, logsRes] = await Promise.all([
-          getStatus(),
-          getLogs(100),
-        ]);
-        setInitialStatus(statusRes.data);
-        setPolledLogs(logsRes.data || []);
-        if (statusRes.data?.bot?.tradingMode) {
-          setTradingMode(statusRes.data.bot.tradingMode);
-        }
-      } catch (err) {
-        console.error('Status poll failed:', err);
-      }
-    }, 500);
-    
-    return () => clearInterval(pollInterval);
+    fetchInitialData();
+    // NO POLLING! WebSocket handles all updates now
   }, []);
 
   useEffect(() => {
@@ -186,7 +168,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
           {/* Left Column - Logs & Commands */}
           <div className="lg:col-span-2 space-y-4">
-            <LogViewer logs={wsLogs.length > 0 ? wsLogs : polledLogs.map(l => ({ ...l, name: 'BOT' }))} className="h-[280px]" />
+            <LogViewer logs={wsLogs} className="h-[280px]" />
             <CommandInput className="h-[320px]" />
           </div>
 
