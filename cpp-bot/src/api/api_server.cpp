@@ -720,7 +720,8 @@ void APIServer::run() {
                         t["price"] = trade.price;
                         t["cost"] = trade.cost;
                         t["fee"] = trade.fee;
-                        t["cash_after"] = trade.cash_after;
+                        t["pnl"] = trade.pnl;
+                        t["is_live"] = trade.is_live;
                         t["timestamp"] = std::chrono::duration_cast<std::chrono::milliseconds>(
                             trade.timestamp.time_since_epoch()).count();
                         trades_data.push_back(t);
