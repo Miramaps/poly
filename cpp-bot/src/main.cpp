@@ -151,16 +151,7 @@ namespace {
             set_live_prices(s_up_price, s_down_price);
         }
         
-        // Call trading engine with orderbook snapshot
-        if (poly::get_engine_ptr() && matched && ask > 0) {
-            poly::OrderbookSnapshot snapshot;
-            snapshot.asks.push_back({ask, 100.0});
-            if (bid > 0) {
-                snapshot.bids.push_back({bid, 100.0});
-            }
-            snapshot.timestamp = std::chrono::system_clock::now();
-            poly::get_engine_ptr()->on_orderbook_update(update.token_id, snapshot);
-        }
+        // Don't send orderbook from price updates - we get full orderbook via orderbook callback
     }
 }
 
