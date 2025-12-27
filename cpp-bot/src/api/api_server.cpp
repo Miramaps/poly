@@ -270,30 +270,35 @@ std::string get_status_json() {
     };
     
     // Use REAL orderbook from engine
-    {
-        std::lock_guard<std::mutex> lock(engine_mutex);
-        if (engine_) {
-            auto status = engine_->get_status();
-            
-            // UP orderbook
-            for (const auto& [price, size] : status.up_orderbook.asks) {
-                nlohmann::json level = {{"price", price}, {"size", size}};
-                orderbooks["UP"]["asks"].push_back(level);
-            }
-            for (const auto& [price, size] : status.up_orderbook.bids) {
-                nlohmann::json level = {{"price", price}, {"size", size}};
-                orderbooks["UP"]["bids"].push_back(level);
-            }
-            
-            // DOWN orderbook
-            for (const auto& [price, size] : status.down_orderbook.asks) {
-                nlohmann::json level = {{"price", price}, {"size", size}};
-                orderbooks["DOWN"]["asks"].push_back(level);
-            }
-            for (const auto& [price, size] : status.down_orderbook.bids) {
-                nlohmann::json level = {{"price", price}, {"size", size}};
-                orderbooks["DOWN"]["bids"].push_back(level);
-            }
+    if (g_engine_ptr) {
+        auto status = g_engine_ptr->get_status();
+        
+        // UP orderbook
+        for (const auto& [price, size] : status.up_orderbook.asks) {
+            nlohmann::json level;
+            level["price"] = price;
+            level["size"] = size;
+            orderbooks["UP"]["asks"].push_back(level);
+        }
+        for (const auto& [price, size] : status.up_orderbook.bids) {
+            nlohmann::json level;
+            level["price"] = price;
+            level["size"] = size;
+            orderbooks["UP"]["bids"].push_back(level);
+        }
+        
+        // DOWN orderbook
+        for (const auto& [price, size] : status.down_orderbook.asks) {
+            nlohmann::json level;
+            level["price"] = price;
+            level["size"] = size;
+            orderbooks["DOWN"]["asks"].push_back(level);
+        }
+        for (const auto& [price, size] : status.down_orderbook.bids) {
+            nlohmann::json level;
+            level["price"] = price;
+            level["size"] = size;
+            orderbooks["DOWN"]["bids"].push_back(level);
         }
     }
     
