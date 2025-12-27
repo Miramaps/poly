@@ -226,8 +226,46 @@ void WebSocketPriceStream::read_loop() {
             try {
                 auto j = nlohmann::json::parse(msg);
                 
-                // PRIORITY 1: Full orderbook snapshots (has bids/asks arrays + asset_id)
-                if (j.contains("asset_id") && (j.contains("bids") || j.contains("asks")) && !j.contains("price_changes")) {
+                // PRIORITY 1: Handle array format (initial snapshot)
+                if (j.is_array() && !j.empty()) {
+                    for (const auto& item : j) {
+                        // Full orderbook snapshot (has bids/asks arrays + asset_id)
+                        if (item.contains("asset_id") && (item.contains("bids") || item.contains("asks"))) {
+                            OrderbookUpdate book_update;
+                            book_update.token_id = item["asset_id"].get<std::string>();
+                            
+                            // Extract ALL asks
+                            if (item.contains("asks") && item["asks"].is_array()) {
+                                for (const auto& ask : item["asks"]) {
+                                    if (ask.contains("price") && ask.contains("size")) {
+                                        double price = std::stod(ask["price"].get<std::string>());
+                                        double size = std::stod(ask["size"].get<std::string>());
+                                        book_update.asks.push_back(std::make_pair(price, size));
+                                    }
+                                }
+                            }
+                            
+                            // Extract ALL bids
+                            if (item.contains("bids") && item["bids"].is_array()) {
+                                for (const auto& bid : item["bids"]) {
+                                    if (bid.contains("price") && bid.contains("size")) {
+                                        double price = std::stod(bid["price"].get<std::string>());
+                                        double size = std::stod(bid["size"].get<std::string>());
+                                        book_update.bids.push_back(std::make_pair(price, size));
+                                    }
+                                }
+                            }
+                            
+                            if (!book_update.asks.empty() || !book_update.bids.empty()) {
+                                if (orderbook_callback_) {
+                                    orderbook_callback_(book_update);
+                                }
+                            }
+                        }
+                    }
+                }
+                // PRIORITY 2: Single object with full orderbook
+                else if (j.contains("asset_id") && (j.contains("bids") || j.contains("asks")) && !j.contains("price_changes")) {
                     // Full orderbook snapshot from WebSocket
                     OrderbookUpdate book_update;
                     book_update.token_id = j["asset_id"].get<std::string>();
