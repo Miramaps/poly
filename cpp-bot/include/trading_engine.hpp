@@ -45,7 +45,7 @@ struct Config {
     bool breakeven_enabled = true;
     double move = 0.36;  // Updated threshold
     int window_min = 15;
-    int dump_window_sec = 3;
+    int dump_window_sec = 120;  // Trade in the last 120 seconds (2 minutes) of each 15-min window
 };
 
 enum class TradingMode {
