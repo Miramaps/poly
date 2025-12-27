@@ -313,6 +313,32 @@ void WebSocketPriceStream::read_loop() {
                             }
                         }
                         
+                        // Extract best_bid and best_ask for orderbook
+                        double best_bid = 0.0, best_ask = 0.0;
+                        if (change.contains("best_bid")) {
+                            if (change["best_bid"].is_string()) {
+                                best_bid = std::stod(change["best_bid"].get<std::string>());
+                            } else if (change["best_bid"].is_number()) {
+                                best_bid = change["best_bid"].get<double>();
+                            }
+                        }
+                        if (change.contains("best_ask")) {
+                            if (change["best_ask"].is_string()) {
+                                best_ask = std::stod(change["best_ask"].get<std::string>());
+                            } else if (change["best_ask"].is_number()) {
+                                best_ask = change["best_ask"].get<double>();
+                            }
+                        }
+                        
+                        // Create simple orderbook from best_bid/best_ask
+                        if (!update.token_id.empty() && (best_bid > 0 || best_ask > 0) && orderbook_callback_) {
+                            OrderbookUpdate book_update;
+                            book_update.token_id = update.token_id;
+                            if (best_ask > 0) book_update.asks.push_back({best_ask, 100.0});
+                            if (best_bid > 0) book_update.bids.push_back({best_bid, 100.0});
+                            orderbook_callback_(book_update);
+                        }
+                        
                         if (!update.token_id.empty() && update.price > 0 && callback_) {
                             callback_(update);
                         }
