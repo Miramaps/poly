@@ -184,9 +184,12 @@ int main() {
         std::string db_url = db_url_env ? db_url_env :
             "postgresql://polytrader:polytrader@localhost:5432/polytrader";
         
+        std::cout << "[DB] Connecting to: " << (db_url_env ? "DATABASE_URL env" : "localhost default") << std::endl;
         poly::Database db(db_url);
         if (db.connect()) {
-            std::cout << "[DB] Connected" << std::endl;
+            std::cout << "[DB] ✓ Connected successfully" << std::endl;
+        } else {
+            std::cerr << "[DB] ✗ Connection FAILED - trades will NOT be saved!" << std::endl;
         }
         
         poly::TradingEngine engine(config);
