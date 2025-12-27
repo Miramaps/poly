@@ -42,24 +42,25 @@ void TradingEngine::stop() {
 void TradingEngine::set_market(const std::string& slug, const std::string& up_token, const std::string& down_token) {
     std::lock_guard<std::mutex> lock(mutex_);
     
-    active_market_slug_ = slug;
-    
-    // Initialize market state if not exists
-    if (markets_.find(slug) == markets_.end()) {
-        markets_[slug] = MarketState{
-            .slug = slug,
-            .up_token_id = up_token,
-            .down_token_id = down_token,
-            .up_orderbook = {},
-            .down_orderbook = {},
-            .last_update = std::chrono::system_clock::now()
-        };
-    } else {
-        markets_[slug].up_token_id = up_token;
-        markets_[slug].down_token_id = down_token;
+    // Clear all old markets when switching to a new one
+    if (active_market_slug_ != slug) {
+        markets_.clear();
+        std::cout << "[ENGINE] Cleared old markets, switching to: " << slug << std::endl;
     }
     
-    std::cout << "[ENGINE] Set active market: " << slug << std::endl;
+    active_market_slug_ = slug;
+    
+    // Initialize market state
+    markets_[slug] = MarketState{
+        .slug = slug,
+        .up_token_id = up_token,
+        .down_token_id = down_token,
+        .up_orderbook = {},
+        .down_orderbook = {},
+        .last_update = std::chrono::system_clock::now()
+    };
+    
+    std::cout << "[ENGINE] Active market: " << slug << std::endl;
 }
 
 EngineStatus TradingEngine::get_status() const {
@@ -175,54 +176,24 @@ void TradingEngine::on_orderbook_update(
     {
         std::lock_guard<std::mutex> lock(mutex_);
         
-        // Debug: Log what we're looking for
-        std::cout << "[ENGINE] on_orderbook_update: token_id=" << token_id.substr(0, 20) << "..." << std::endl;
-        std::cout << "[ENGINE] Markets count: " << markets_.size() << std::endl;
-        for (const auto& [slug, market] : markets_) {
-            std::cout << "[ENGINE] Market: " << slug << " | UP: " << market.up_token_id.substr(0, 20) 
-                      << "... | DOWN: " << market.down_token_id.substr(0, 20) << "..." << std::endl;
-        }
-        
         // Find which market this token belongs to
-        bool found = false;
         for (auto& [slug, market] : markets_) {
             if (market.up_token_id == token_id) {
-                std::cout << "[ENGINE] ✓ Matched UP token for market: " << slug << std::endl;
-                std::cout << "[ENGINE] Orderbook snapshot has " << snapshot.asks.size() << " asks, " 
-                          << snapshot.bids.size() << " bids" << std::endl;
-                if (!snapshot.asks.empty()) {
-                    std::cout << "[ENGINE] Best ask: $" << snapshot.asks[0].first << std::endl;
-                }
                 market.up_orderbook = std::move(snapshot);
                 market.last_update = std::chrono::system_clock::now();
                 market_to_process = slug;
-                found = true;
                 break;
             } else if (market.down_token_id == token_id) {
-                std::cout << "[ENGINE] ✓ Matched DOWN token for market: " << slug << std::endl;
-                std::cout << "[ENGINE] Orderbook snapshot has " << snapshot.asks.size() << " asks, " 
-                          << snapshot.bids.size() << " bids" << std::endl;
-                if (!snapshot.asks.empty()) {
-                    std::cout << "[ENGINE] Best ask: $" << snapshot.asks[0].first << std::endl;
-                }
                 market.down_orderbook = std::move(snapshot);
                 market.last_update = std::chrono::system_clock::now();
                 market_to_process = slug;
-                found = true;
                 break;
             }
-        }
-        
-        if (!found) {
-            std::cout << "[ENGINE] ❌ WARNING: Token ID not found in any market!" << std::endl;
-            std::cout << "[ENGINE] Token ID: " << token_id.substr(0, 40) << "..." << std::endl;
         }
     }
     
     if (!market_to_process.empty()) {
         process_market(market_to_process);
-    } else {
-        std::cout << "[ENGINE] ❌ Not processing market - token not matched!" << std::endl;
     }
 }
 
@@ -231,7 +202,6 @@ void TradingEngine::process_market(const std::string& market_slug) {
     if (it == markets_.end()) return;
     
     const auto& market = it->second;
-    
     
     // Extract START timestamp from market slug
     int64_t market_start_time = 0;
@@ -244,12 +214,13 @@ void TradingEngine::process_market(const std::string& market_slug) {
     int secs_into_window = static_cast<int>(now_sec - market_start_time);
     int time_left = 900 - secs_into_window;
     
-    std::cout << "[ENGINE] process_market: " << market_slug << " | secs=" << secs_into_window
-              << " | time_left=" << time_left << " | window=" << config_.dump_window_sec << std::endl;
-    
-    if (secs_into_window < 0 || secs_into_window > config_.dump_window_sec) {
-        return;
+    // Trade in the LAST X seconds of the window (when time_left <= window)
+    // NOT the first X seconds!
+    if (time_left < 0 || time_left > config_.dump_window_sec) {
+        return;  // Not in trading window yet
     }
+    
+    std::cout << "[ENGINE] 🔥 IN TRADING WINDOW - checking for entry..." << std::endl;
     
     // Check if we should enter a position
     if (!current_position_) {
@@ -367,27 +338,19 @@ bool TradingEngine::should_enter(
     std::string& side_out,
     double& price_out
 ) {
-    std::cout << "[ENGINE] should_enter: UP orderbook has " << market.up_orderbook.asks.size() 
-              << " asks, DOWN orderbook has " << market.down_orderbook.asks.size() << " asks" << std::endl;
-    
     double up_ask = get_best_ask(market.up_orderbook);
     double down_ask = get_best_ask(market.down_orderbook);
-    
-    std::cout << "[ENGINE] should_enter: up_ask=$" << up_ask << " down_ask=$" << down_ask 
-              << " threshold=$" << config_.move << std::endl;
     
     // Check if either side dropped below threshold (0.36)
     if (up_ask < config_.move) {
         side_out = "UP";
         price_out = up_ask;
-        std::cout << "[ENGINE] should_enter: RETURNING TRUE for UP, price_out=$" << price_out << std::endl;
         return true;
     }
     
     if (down_ask < config_.move) {
         side_out = "DOWN";
         price_out = down_ask;
-        std::cout << "[ENGINE] should_enter: RETURNING TRUE for DOWN, price_out=$" << price_out << std::endl;
         return true;
     }
     
@@ -423,9 +386,6 @@ std::optional<Trade> TradingEngine::execute_trade(
     double shares,
     double price
 ) {
-    std::cout << "[ENGINE] execute_trade: mode=" << get_trading_mode_string() 
-              << " side=" << side << " shares=" << shares << " price=$" << price << std::endl;
-    
     // Route to appropriate trade execution method
     if (trading_mode_ == TradingMode::LIVE && polymarket_client_) {
         return execute_live_trade(market_slug, side, token_id, shares, price);
@@ -441,7 +401,6 @@ std::optional<Trade> TradingEngine::execute_paper_trade(
     double shares,
     double price
 ) {
-    std::cout << "[PAPER] Executing paper trade: " << side << " " << shares << " @ $" << price << std::endl;
     
     Trade trade{
         .id = "paper_" + std::to_string(
@@ -494,7 +453,6 @@ std::optional<Trade> TradingEngine::execute_paper_trade(
         }
     }
     
-    std::cout << "[PAPER] ✓ Trade simulated: " << trade.id << std::endl;
     return trade;
 }
 

@@ -140,14 +140,6 @@ namespace {
             poly::get_engine_ptr()->on_orderbook_update(update.token_id, snapshot);
         }
         
-        // Debug: log every 500th callback (less spam)
-        if (callback_count <= 5 || callback_count % 500 == 0) {
-            std::cout << "[PRICE CB #" << callback_count << "] " 
-                      << (matched ? "MATCHED" : "UNMATCHED") 
-                      << " p=" << price 
-                      << " UP=$" << s_up_price 
-                      << " DOWN=$" << s_down_price << std::endl;
-        }
     }
 }
 
@@ -251,11 +243,12 @@ int main() {
                     std::cout << "[TOKENS] UP:   " << g_up_token.substr(0,24) << "..." << std::endl;
                     std::cout << "[TOKENS] DOWN: " << g_down_token.substr(0,24) << "..." << std::endl;
                     
-                    // Clear old subscriptions and subscribe to new tokens
-                    // No need to reconnect - just change subscriptions
+                    // Force reconnect with new subscriptions
+                    // (WebSocket read/write not thread-safe, reconnect is cleaner)
                     g_ws->clear_subscriptions();
                     g_ws->subscribe(g_up_token);
                     g_ws->subscribe(g_down_token);
+                    g_ws->reconnect();  // Force fresh connection with new subscriptions
                     
                     // Reset prices for new market
                     s_up_price = 0.0;
