@@ -218,22 +218,8 @@ int main() {
         g_ws->set_callback(on_price_update);
         
         // Set orderbook callback for full depth updates via WebSocket
-        static int book_count = 0;
         g_ws->set_orderbook_callback([](const poly::OrderbookUpdate& update) {
             if (!poly::get_engine_ptr()) return;
-            
-            book_count++;
-            std::string side = "UNKNOWN";
-            if (update.token_id == g_up_token) side = "UP";
-            else if (update.token_id == g_down_token) side = "DOWN";
-            
-            if (book_count <= 20) {
-                std::cout << "[BOOK WS] " << side << " orderbook: " << update.asks.size() 
-                          << " asks, " << update.bids.size() << " bids"
-                          << " | token: " << update.token_id.substr(0, 12) << "..."
-                          << " | up_token: " << g_up_token.substr(0, 12) << "..."
-                          << " | down_token: " << g_down_token.substr(0, 12) << "..." << std::endl;
-            }
             
             poly::OrderbookSnapshot snapshot;
             snapshot.asks = update.asks;  // Already in the right format (pairs)
@@ -456,17 +442,13 @@ int main() {
                 }
             }
 
-            // Broadcast FULL status to dashboard WebSocket every 100ms (instant feel)
+            // Broadcast FULL status to dashboard WebSocket every 50ms (INSTANT updates)
             static auto last_broadcast_time = std::chrono::steady_clock::now();
             static int broadcast_check_count = 0;
             auto broadcast_now = std::chrono::steady_clock::now();
-            if (std::chrono::duration_cast<std::chrono::milliseconds>(broadcast_now - last_broadcast_time).count() >= 100) {
+            if (std::chrono::duration_cast<std::chrono::milliseconds>(broadcast_now - last_broadcast_time).count() >= 50) {
                 last_broadcast_time = broadcast_now;
                 broadcast_check_count++;
-                
-                if (broadcast_check_count <= 3) {
-                    std::cout << "[BROADCAST] Check #" << broadcast_check_count << " - engine_ptr: " << (poly::get_engine_ptr() ? "OK" : "NULL") << std::endl;
-                }
                 
                 if (poly::get_engine_ptr()) {
                     auto status = poly::get_engine_ptr()->get_status();
@@ -519,13 +501,7 @@ int main() {
                         ws_msg["orderbooks"]["DOWN"]["bids"].push_back(level);
                     }
                     
-                    std::string msg_str = ws_msg.dump();
-                    static int broadcast_count = 0;
-                    broadcast_count++;
-                    if (broadcast_count <= 5 || broadcast_count % 100 == 0) {
-                        std::cout << "[BROADCAST #" << broadcast_count << "] Sending " << msg_str.length() << " bytes" << std::endl;
-                    }
-                    poly::broadcast_status(msg_str);
+                    poly::broadcast_status(ws_msg.dump());
                 }
             }
         }

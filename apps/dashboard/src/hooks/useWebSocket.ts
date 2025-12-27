@@ -6,33 +6,29 @@ import { getStatus, getLogs } from '@/lib/api';
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://18.175.223.104:3002';
 
 export function useWebSocket() {
-  const [isConnected, setIsConnected] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
   const [status, setStatus] = useState<any>(null);
   const [logs, setLogs] = useState<any[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
-  const initialDataLoaded = useRef(false);
+  const wsConnected = useRef(false);
 
-  // Poll status continuously to get currentCycle and other updates
-  const pollStatus = useCallback(async () => {
-    try {
-      const res = await getStatus();
-      if (res.success && res.data) {
-        setStatus(res.data);
-        initialDataLoaded.current = true;
+  // Only fetch initial status ONCE (for currentCycle etc that WS doesn't have)
+  useEffect(() => {
+    const fetchInitial = async () => {
+      try {
+        const res = await getStatus();
+        if (res.success && res.data) {
+          setStatus(res.data);
+        }
+      } catch (err) {
+        console.error('[STATUS] Initial fetch failed:', err);
       }
-    } catch (err) {
-      console.error('[STATUS] Poll failed:', err);
-    }
+    };
+    fetchInitial();
   }, []);
 
-  useEffect(() => {
-    pollStatus(); // Initial fetch
-    const statusInterval = setInterval(pollStatus, 1000); // Poll every second
-    return () => clearInterval(statusInterval);
-  }, [pollStatus]);
-
-  // WebSocket for ALL real-time updates
+  // WebSocket for ALL real-time updates - NO HTTP POLLING!
   useEffect(() => {
     const connect = () => {
       try {
@@ -40,8 +36,9 @@ export function useWebSocket() {
         wsRef.current = ws;
 
         ws.onopen = () => {
-          console.log('[WS] Connected');
+          console.log('[WS] Connected - REAL-TIME MODE');
           setIsConnected(true);
+          wsConnected.current = true;
         };
 
         ws.onmessage = (event) => {
@@ -84,13 +81,18 @@ export function useWebSocket() {
           }
         };
 
-        ws.onerror = () => setIsConnected(false);
+        ws.onerror = () => {
+          setIsConnected(false);
+          wsConnected.current = false;
+        };
+        
         ws.onclose = () => {
           setIsConnected(false);
-          reconnectTimeout.current = setTimeout(connect, 1000);
+          wsConnected.current = false;
+          reconnectTimeout.current = setTimeout(connect, 500); // Fast reconnect
         };
       } catch (err) {
-        reconnectTimeout.current = setTimeout(connect, 1000);
+        reconnectTimeout.current = setTimeout(connect, 500);
       }
     };
 
@@ -101,7 +103,7 @@ export function useWebSocket() {
     };
   }, []);
 
-  // Logs polling only (no WebSocket for logs)
+  // Logs polling only (low priority, every 2s)
   const pollLogs = useCallback(async () => {
     try {
       const res = await getLogs(50);
