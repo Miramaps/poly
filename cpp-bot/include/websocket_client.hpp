@@ -23,6 +23,9 @@ namespace net = boost::asio;
 namespace ssl = boost::asio::ssl;
 using tcp = boost::asio::ip::tcp;
 
+// Forward declaration from polymarket_client.hpp
+struct OrderbookLevel;
+
 struct PriceUpdate {
     std::string token_id;
     double price = 0.0;
@@ -31,15 +34,10 @@ struct PriceUpdate {
     uint64_t timestamp = 0;
 };
 
-struct OrderbookLevel {
-    double price;
-    double size;
-};
-
 struct OrderbookUpdate {
     std::string token_id;
-    std::vector<OrderbookLevel> bids;
-    std::vector<OrderbookLevel> asks;
+    std::vector<std::pair<double, double>> bids;  // price, size
+    std::vector<std::pair<double, double>> asks;
 };
 
 class WebSocketPriceStream {

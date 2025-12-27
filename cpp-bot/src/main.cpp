@@ -231,12 +231,8 @@ int main() {
             if (!poly::get_engine_ptr()) return;
             
             poly::OrderbookSnapshot snapshot;
-            for (const auto& ask : update.asks) {
-                snapshot.asks.push_back({ask.price, ask.size});
-            }
-            for (const auto& bid : update.bids) {
-                snapshot.bids.push_back({bid.price, bid.size});
-            }
+            snapshot.asks = update.asks;  // Already in the right format (pairs)
+            snapshot.bids = update.bids;
             snapshot.timestamp = std::chrono::system_clock::now();
             
             poly::get_engine_ptr()->on_orderbook_update(update.token_id, snapshot);
