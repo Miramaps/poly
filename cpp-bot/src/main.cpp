@@ -117,13 +117,27 @@ namespace {
         
         bool matched = false;
         
-        // Use best_ask as the price (what you pay to buy)
-        double price = update.best_ask > 0 ? update.best_ask : update.price;
-        double bid = update.best_bid > 0 ? update.best_bid : (price - 0.01);
-        double ask = update.best_ask > 0 ? update.best_ask : price;
+        // Determine the best available price
+        // Priority: best_ask > price (from price_changes)
+        double ask = 0.0;
+        double bid = 0.0;
+        
+        if (update.best_ask > 0) {
+            ask = update.best_ask;
+        } else if (update.price > 0) {
+            ask = update.price;  // Use price as ask
+        }
+        
+        if (update.best_bid > 0) {
+            bid = update.best_bid;
+        } else if (ask > 0) {
+            bid = ask - 0.01;  // Estimate bid as ask - spread
+        }
+        
+        if (ask <= 0) return;  // No valid price, skip
         
         if (update.token_id == g_up_token) {
-            s_up_price = ask;  // Use ask price (what you pay)
+            s_up_price = ask;
             g_up_price.store(ask);
             matched = true;
         } else if (update.token_id == g_down_token) {
@@ -135,13 +149,10 @@ namespace {
         // Update the API server with latest prices
         set_live_prices(s_up_price, s_down_price);
         
-        // Call trading engine with REAL orderbook data from WebSocket
-        if (poly::get_engine_ptr() && matched) {
+        // Call trading engine with orderbook snapshot
+        if (poly::get_engine_ptr() && matched && ask > 0) {
             poly::OrderbookSnapshot snapshot;
-            // Use real bid/ask from WebSocket
-            if (ask > 0) {
-                snapshot.asks.push_back({ask, 100.0});
-            }
+            snapshot.asks.push_back({ask, 100.0});
             if (bid > 0) {
                 snapshot.bids.push_back({bid, 100.0});
             }
