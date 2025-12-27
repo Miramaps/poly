@@ -90,10 +90,11 @@ export default function DashboardPage() {
     endTime: windowData?.windowEnd ? new Date(windowData.windowEnd * 1000).toISOString() : undefined,
   } : null;
 
-  const upAsk = orderbooks.UP?.bestAsk;
-  const downAsk = orderbooks.DOWN?.bestAsk;
-  const upBid = orderbooks.UP?.bestBid;
-  const downBid = orderbooks.DOWN?.bestBid;
+  // Extract best prices from orderbook arrays
+  const upAsk = orderbooks.UP?.asks?.[0]?.price ?? orderbooks.UP?.bestAsk;
+  const downAsk = orderbooks.DOWN?.asks?.[0]?.price ?? orderbooks.DOWN?.bestAsk;
+  const upBid = orderbooks.UP?.bids?.[0]?.price ?? orderbooks.UP?.bestBid;
+  const downBid = orderbooks.DOWN?.bids?.[0]?.price ?? orderbooks.DOWN?.bestBid;
 
   const pnlPct = ((portfolio.equity - 1000) / 1000) * 100;
 

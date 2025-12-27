@@ -19,6 +19,8 @@ public:
     
 private:
     void run();
+    std::string get_status_json();
+    std::string process_command(const std::string& cmd);
     
     TradingEngine& engine_;
     Database& db_;

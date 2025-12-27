@@ -9,6 +9,7 @@ set(CMAKE_DEPENDS_LANGUAGES
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
   "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/api/api_server.cpp" "CMakeFiles/poly-trader-cpp.dir/src/api/api_server.cpp.o" "gcc" "CMakeFiles/poly-trader-cpp.dir/src/api/api_server.cpp.o.d"
+  "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/database/async_writer.cpp" "CMakeFiles/poly-trader-cpp.dir/src/database/async_writer.cpp.o" "gcc" "CMakeFiles/poly-trader-cpp.dir/src/database/async_writer.cpp.o.d"
   "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/database/database.cpp" "CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.o" "gcc" "CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.o.d"
   "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/engine/dca_manager.cpp" "CMakeFiles/poly-trader-cpp.dir/src/engine/dca_manager.cpp.o" "gcc" "CMakeFiles/poly-trader-cpp.dir/src/engine/dca_manager.cpp.o.d"
   "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/engine/dump_detector.cpp" "CMakeFiles/poly-trader-cpp.dir/src/engine/dump_detector.cpp.o" "gcc" "CMakeFiles/poly-trader-cpp.dir/src/engine/dump_detector.cpp.o.d"
@@ -16,6 +17,7 @@ set(CMAKE_DEPENDS_DEPENDENCY_FILES
   "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/main.cpp" "CMakeFiles/poly-trader-cpp.dir/src/main.cpp.o" "gcc" "CMakeFiles/poly-trader-cpp.dir/src/main.cpp.o.d"
   "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/network/polymarket_client.cpp" "CMakeFiles/poly-trader-cpp.dir/src/network/polymarket_client.cpp.o" "gcc" "CMakeFiles/poly-trader-cpp.dir/src/network/polymarket_client.cpp.o.d"
   "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/network/websocket_client.cpp" "CMakeFiles/poly-trader-cpp.dir/src/network/websocket_client.cpp.o" "gcc" "CMakeFiles/poly-trader-cpp.dir/src/network/websocket_client.cpp.o.d"
+  "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/network/ws_server.cpp" "CMakeFiles/poly-trader-cpp.dir/src/network/ws_server.cpp.o" "gcc" "CMakeFiles/poly-trader-cpp.dir/src/network/ws_server.cpp.o.d"
   "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/utils/logger.cpp" "CMakeFiles/poly-trader-cpp.dir/src/utils/logger.cpp.o" "gcc" "CMakeFiles/poly-trader-cpp.dir/src/utils/logger.cpp.o.d"
   )
 

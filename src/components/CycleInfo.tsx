@@ -43,10 +43,23 @@ export function CycleInfo({ cycle, orderbooks, className }: CycleInfoProps) {
 
   return (
     <div className={cn('bg-card border border-border rounded-lg p-4 shadow-card', className)}>
-      <h3 className="text-lg font-semibold mb-4">Current Cycle</h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold">Current Cycle</h3>
+        {cycle && (
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-accent/10 border border-accent/30">
+            <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+            <span className="text-[10px] text-accent font-medium">TRADING</span>
+          </div>
+        )}
+      </div>
       
       {!cycle ? (
-        <div className="text-muted text-center py-4">No active cycle</div>
+        <div className="text-center py-8">
+          <div className="text-muted mb-2">No active cycle</div>
+          <div className="text-xs text-muted/70">
+            💡 Trades complete in 1-3 seconds during trading windows
+          </div>
+        </div>
       ) : (
         <div className="space-y-4">
           {/* Status */}

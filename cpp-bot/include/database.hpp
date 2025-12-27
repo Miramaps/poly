@@ -47,6 +47,9 @@ public:
     bool connect();
     void disconnect();
     
+    // Market operations (for foreign key)
+    bool ensure_market_exists(const std::string& slug, const std::string& title = "");
+    
     // Trade operations
     bool insert_trade(const TradeRecord& trade);
     std::vector<TradeRecord> get_trades(const std::string& market_slug);

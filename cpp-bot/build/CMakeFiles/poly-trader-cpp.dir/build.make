@@ -100,10 +100,38 @@ CMakeFiles/poly-trader-cpp.dir/src/api/api_server.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/poly-trader-cpp.dir/src/api/api_server.cpp.s"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/api/api_server.cpp" -o CMakeFiles/poly-trader-cpp.dir/src/api/api_server.cpp.s
 
+CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.o: CMakeFiles/poly-trader-cpp.dir/flags.make
+CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.o: /Users/dani/Desktop/POLY\ TRADER/cpp-bot/src/database/database.cpp
+CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.o: CMakeFiles/poly-trader-cpp.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.o -MF CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.o.d -o CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.o -c "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/database/database.cpp"
+
+CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/database/database.cpp" > CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.i
+
+CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/database/database.cpp" -o CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.s
+
+CMakeFiles/poly-trader-cpp.dir/src/database/async_writer.cpp.o: CMakeFiles/poly-trader-cpp.dir/flags.make
+CMakeFiles/poly-trader-cpp.dir/src/database/async_writer.cpp.o: /Users/dani/Desktop/POLY\ TRADER/cpp-bot/src/database/async_writer.cpp
+CMakeFiles/poly-trader-cpp.dir/src/database/async_writer.cpp.o: CMakeFiles/poly-trader-cpp.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object CMakeFiles/poly-trader-cpp.dir/src/database/async_writer.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/poly-trader-cpp.dir/src/database/async_writer.cpp.o -MF CMakeFiles/poly-trader-cpp.dir/src/database/async_writer.cpp.o.d -o CMakeFiles/poly-trader-cpp.dir/src/database/async_writer.cpp.o -c "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/database/async_writer.cpp"
+
+CMakeFiles/poly-trader-cpp.dir/src/database/async_writer.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/poly-trader-cpp.dir/src/database/async_writer.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/database/async_writer.cpp" > CMakeFiles/poly-trader-cpp.dir/src/database/async_writer.cpp.i
+
+CMakeFiles/poly-trader-cpp.dir/src/database/async_writer.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/poly-trader-cpp.dir/src/database/async_writer.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/database/async_writer.cpp" -o CMakeFiles/poly-trader-cpp.dir/src/database/async_writer.cpp.s
+
 CMakeFiles/poly-trader-cpp.dir/src/engine/trading_engine.cpp.o: CMakeFiles/poly-trader-cpp.dir/flags.make
 CMakeFiles/poly-trader-cpp.dir/src/engine/trading_engine.cpp.o: /Users/dani/Desktop/POLY\ TRADER/cpp-bot/src/engine/trading_engine.cpp
 CMakeFiles/poly-trader-cpp.dir/src/engine/trading_engine.cpp.o: CMakeFiles/poly-trader-cpp.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/poly-trader-cpp.dir/src/engine/trading_engine.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object CMakeFiles/poly-trader-cpp.dir/src/engine/trading_engine.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/poly-trader-cpp.dir/src/engine/trading_engine.cpp.o -MF CMakeFiles/poly-trader-cpp.dir/src/engine/trading_engine.cpp.o.d -o CMakeFiles/poly-trader-cpp.dir/src/engine/trading_engine.cpp.o -c "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/engine/trading_engine.cpp"
 
 CMakeFiles/poly-trader-cpp.dir/src/engine/trading_engine.cpp.i: cmake_force
@@ -117,7 +145,7 @@ CMakeFiles/poly-trader-cpp.dir/src/engine/trading_engine.cpp.s: cmake_force
 CMakeFiles/poly-trader-cpp.dir/src/engine/dump_detector.cpp.o: CMakeFiles/poly-trader-cpp.dir/flags.make
 CMakeFiles/poly-trader-cpp.dir/src/engine/dump_detector.cpp.o: /Users/dani/Desktop/POLY\ TRADER/cpp-bot/src/engine/dump_detector.cpp
 CMakeFiles/poly-trader-cpp.dir/src/engine/dump_detector.cpp.o: CMakeFiles/poly-trader-cpp.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object CMakeFiles/poly-trader-cpp.dir/src/engine/dump_detector.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object CMakeFiles/poly-trader-cpp.dir/src/engine/dump_detector.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/poly-trader-cpp.dir/src/engine/dump_detector.cpp.o -MF CMakeFiles/poly-trader-cpp.dir/src/engine/dump_detector.cpp.o.d -o CMakeFiles/poly-trader-cpp.dir/src/engine/dump_detector.cpp.o -c "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/engine/dump_detector.cpp"
 
 CMakeFiles/poly-trader-cpp.dir/src/engine/dump_detector.cpp.i: cmake_force
@@ -131,7 +159,7 @@ CMakeFiles/poly-trader-cpp.dir/src/engine/dump_detector.cpp.s: cmake_force
 CMakeFiles/poly-trader-cpp.dir/src/engine/dca_manager.cpp.o: CMakeFiles/poly-trader-cpp.dir/flags.make
 CMakeFiles/poly-trader-cpp.dir/src/engine/dca_manager.cpp.o: /Users/dani/Desktop/POLY\ TRADER/cpp-bot/src/engine/dca_manager.cpp
 CMakeFiles/poly-trader-cpp.dir/src/engine/dca_manager.cpp.o: CMakeFiles/poly-trader-cpp.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object CMakeFiles/poly-trader-cpp.dir/src/engine/dca_manager.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_7) "Building CXX object CMakeFiles/poly-trader-cpp.dir/src/engine/dca_manager.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/poly-trader-cpp.dir/src/engine/dca_manager.cpp.o -MF CMakeFiles/poly-trader-cpp.dir/src/engine/dca_manager.cpp.o.d -o CMakeFiles/poly-trader-cpp.dir/src/engine/dca_manager.cpp.o -c "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/engine/dca_manager.cpp"
 
 CMakeFiles/poly-trader-cpp.dir/src/engine/dca_manager.cpp.i: cmake_force
@@ -145,7 +173,7 @@ CMakeFiles/poly-trader-cpp.dir/src/engine/dca_manager.cpp.s: cmake_force
 CMakeFiles/poly-trader-cpp.dir/src/network/polymarket_client.cpp.o: CMakeFiles/poly-trader-cpp.dir/flags.make
 CMakeFiles/poly-trader-cpp.dir/src/network/polymarket_client.cpp.o: /Users/dani/Desktop/POLY\ TRADER/cpp-bot/src/network/polymarket_client.cpp
 CMakeFiles/poly-trader-cpp.dir/src/network/polymarket_client.cpp.o: CMakeFiles/poly-trader-cpp.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object CMakeFiles/poly-trader-cpp.dir/src/network/polymarket_client.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_8) "Building CXX object CMakeFiles/poly-trader-cpp.dir/src/network/polymarket_client.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/poly-trader-cpp.dir/src/network/polymarket_client.cpp.o -MF CMakeFiles/poly-trader-cpp.dir/src/network/polymarket_client.cpp.o.d -o CMakeFiles/poly-trader-cpp.dir/src/network/polymarket_client.cpp.o -c "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/network/polymarket_client.cpp"
 
 CMakeFiles/poly-trader-cpp.dir/src/network/polymarket_client.cpp.i: cmake_force
@@ -159,7 +187,7 @@ CMakeFiles/poly-trader-cpp.dir/src/network/polymarket_client.cpp.s: cmake_force
 CMakeFiles/poly-trader-cpp.dir/src/network/websocket_client.cpp.o: CMakeFiles/poly-trader-cpp.dir/flags.make
 CMakeFiles/poly-trader-cpp.dir/src/network/websocket_client.cpp.o: /Users/dani/Desktop/POLY\ TRADER/cpp-bot/src/network/websocket_client.cpp
 CMakeFiles/poly-trader-cpp.dir/src/network/websocket_client.cpp.o: CMakeFiles/poly-trader-cpp.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_7) "Building CXX object CMakeFiles/poly-trader-cpp.dir/src/network/websocket_client.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_9) "Building CXX object CMakeFiles/poly-trader-cpp.dir/src/network/websocket_client.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/poly-trader-cpp.dir/src/network/websocket_client.cpp.o -MF CMakeFiles/poly-trader-cpp.dir/src/network/websocket_client.cpp.o.d -o CMakeFiles/poly-trader-cpp.dir/src/network/websocket_client.cpp.o -c "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/network/websocket_client.cpp"
 
 CMakeFiles/poly-trader-cpp.dir/src/network/websocket_client.cpp.i: cmake_force
@@ -170,24 +198,24 @@ CMakeFiles/poly-trader-cpp.dir/src/network/websocket_client.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/poly-trader-cpp.dir/src/network/websocket_client.cpp.s"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/network/websocket_client.cpp" -o CMakeFiles/poly-trader-cpp.dir/src/network/websocket_client.cpp.s
 
-CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.o: CMakeFiles/poly-trader-cpp.dir/flags.make
-CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.o: /Users/dani/Desktop/POLY\ TRADER/cpp-bot/src/database/database.cpp
-CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.o: CMakeFiles/poly-trader-cpp.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_8) "Building CXX object CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.o -MF CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.o.d -o CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.o -c "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/database/database.cpp"
+CMakeFiles/poly-trader-cpp.dir/src/network/ws_server.cpp.o: CMakeFiles/poly-trader-cpp.dir/flags.make
+CMakeFiles/poly-trader-cpp.dir/src/network/ws_server.cpp.o: /Users/dani/Desktop/POLY\ TRADER/cpp-bot/src/network/ws_server.cpp
+CMakeFiles/poly-trader-cpp.dir/src/network/ws_server.cpp.o: CMakeFiles/poly-trader-cpp.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_10) "Building CXX object CMakeFiles/poly-trader-cpp.dir/src/network/ws_server.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/poly-trader-cpp.dir/src/network/ws_server.cpp.o -MF CMakeFiles/poly-trader-cpp.dir/src/network/ws_server.cpp.o.d -o CMakeFiles/poly-trader-cpp.dir/src/network/ws_server.cpp.o -c "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/network/ws_server.cpp"
 
-CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/database/database.cpp" > CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.i
+CMakeFiles/poly-trader-cpp.dir/src/network/ws_server.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/poly-trader-cpp.dir/src/network/ws_server.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/network/ws_server.cpp" > CMakeFiles/poly-trader-cpp.dir/src/network/ws_server.cpp.i
 
-CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/database/database.cpp" -o CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.s
+CMakeFiles/poly-trader-cpp.dir/src/network/ws_server.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/poly-trader-cpp.dir/src/network/ws_server.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/network/ws_server.cpp" -o CMakeFiles/poly-trader-cpp.dir/src/network/ws_server.cpp.s
 
 CMakeFiles/poly-trader-cpp.dir/src/utils/logger.cpp.o: CMakeFiles/poly-trader-cpp.dir/flags.make
 CMakeFiles/poly-trader-cpp.dir/src/utils/logger.cpp.o: /Users/dani/Desktop/POLY\ TRADER/cpp-bot/src/utils/logger.cpp
 CMakeFiles/poly-trader-cpp.dir/src/utils/logger.cpp.o: CMakeFiles/poly-trader-cpp.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_9) "Building CXX object CMakeFiles/poly-trader-cpp.dir/src/utils/logger.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_11) "Building CXX object CMakeFiles/poly-trader-cpp.dir/src/utils/logger.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/poly-trader-cpp.dir/src/utils/logger.cpp.o -MF CMakeFiles/poly-trader-cpp.dir/src/utils/logger.cpp.o.d -o CMakeFiles/poly-trader-cpp.dir/src/utils/logger.cpp.o -c "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/utils/logger.cpp"
 
 CMakeFiles/poly-trader-cpp.dir/src/utils/logger.cpp.i: cmake_force
@@ -202,12 +230,14 @@ CMakeFiles/poly-trader-cpp.dir/src/utils/logger.cpp.s: cmake_force
 poly__trader__cpp_OBJECTS = \
 "CMakeFiles/poly-trader-cpp.dir/src/main.cpp.o" \
 "CMakeFiles/poly-trader-cpp.dir/src/api/api_server.cpp.o" \
+"CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.o" \
+"CMakeFiles/poly-trader-cpp.dir/src/database/async_writer.cpp.o" \
 "CMakeFiles/poly-trader-cpp.dir/src/engine/trading_engine.cpp.o" \
 "CMakeFiles/poly-trader-cpp.dir/src/engine/dump_detector.cpp.o" \
 "CMakeFiles/poly-trader-cpp.dir/src/engine/dca_manager.cpp.o" \
 "CMakeFiles/poly-trader-cpp.dir/src/network/polymarket_client.cpp.o" \
 "CMakeFiles/poly-trader-cpp.dir/src/network/websocket_client.cpp.o" \
-"CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.o" \
+"CMakeFiles/poly-trader-cpp.dir/src/network/ws_server.cpp.o" \
 "CMakeFiles/poly-trader-cpp.dir/src/utils/logger.cpp.o"
 
 # External object files for target poly-trader-cpp
@@ -215,22 +245,23 @@ poly__trader__cpp_EXTERNAL_OBJECTS =
 
 poly-trader-cpp: CMakeFiles/poly-trader-cpp.dir/src/main.cpp.o
 poly-trader-cpp: CMakeFiles/poly-trader-cpp.dir/src/api/api_server.cpp.o
+poly-trader-cpp: CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.o
+poly-trader-cpp: CMakeFiles/poly-trader-cpp.dir/src/database/async_writer.cpp.o
 poly-trader-cpp: CMakeFiles/poly-trader-cpp.dir/src/engine/trading_engine.cpp.o
 poly-trader-cpp: CMakeFiles/poly-trader-cpp.dir/src/engine/dump_detector.cpp.o
 poly-trader-cpp: CMakeFiles/poly-trader-cpp.dir/src/engine/dca_manager.cpp.o
 poly-trader-cpp: CMakeFiles/poly-trader-cpp.dir/src/network/polymarket_client.cpp.o
 poly-trader-cpp: CMakeFiles/poly-trader-cpp.dir/src/network/websocket_client.cpp.o
-poly-trader-cpp: CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.o
+poly-trader-cpp: CMakeFiles/poly-trader-cpp.dir/src/network/ws_server.cpp.o
 poly-trader-cpp: CMakeFiles/poly-trader-cpp.dir/src/utils/logger.cpp.o
 poly-trader-cpp: CMakeFiles/poly-trader-cpp.dir/build.make
+poly-trader-cpp: /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/lib/libcurl.tbd
+poly-trader-cpp: /opt/homebrew/lib/postgresql@14/libpq.dylib
 poly-trader-cpp: /opt/homebrew/lib/libboost_system.dylib
-poly-trader-cpp: /opt/homebrew/lib/libboost_thread.dylib
 poly-trader-cpp: /opt/homebrew/Cellar/openssl@3/3.5.2/lib/libssl.dylib
 poly-trader-cpp: /opt/homebrew/Cellar/openssl@3/3.5.2/lib/libcrypto.dylib
-poly-trader-cpp: /opt/homebrew/lib/postgresql@14/libpq.dylib
-poly-trader-cpp: /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/lib/libcurl.tbd
 poly-trader-cpp: CMakeFiles/poly-trader-cpp.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir="/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_10) "Linking CXX executable poly-trader-cpp"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir="/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_12) "Linking CXX executable poly-trader-cpp"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/poly-trader-cpp.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.

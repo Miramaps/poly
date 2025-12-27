@@ -1,0 +1,68 @@
+[
+{
+  "directory": "/Users/dani/Desktop/POLY TRADER/cpp-bot/build",
+  "command": "/usr/bin/c++ -DBOOST_SYSTEM_DYN_LINK -DBOOST_SYSTEM_NO_LIB -I\"/Users/dani/Desktop/POLY TRADER/cpp-bot/include\" -isystem /opt/homebrew/include/postgresql@14 -isystem /opt/homebrew/include/postgresql@14/server -isystem /opt/homebrew/include -isystem /opt/homebrew/Cellar/openssl@3/3.5.2/include -std=gnu++17 -arch arm64 -Wall -Wextra -O2 -o CMakeFiles/poly-trader-cpp.dir/src/main.cpp.o -c \"/Users/dani/Desktop/POLY TRADER/cpp-bot/src/main.cpp\"",
+  "file": "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/main.cpp",
+  "output": "CMakeFiles/poly-trader-cpp.dir/src/main.cpp.o"
+},
+{
+  "directory": "/Users/dani/Desktop/POLY TRADER/cpp-bot/build",
+  "command": "/usr/bin/c++ -DBOOST_SYSTEM_DYN_LINK -DBOOST_SYSTEM_NO_LIB -I\"/Users/dani/Desktop/POLY TRADER/cpp-bot/include\" -isystem /opt/homebrew/include/postgresql@14 -isystem /opt/homebrew/include/postgresql@14/server -isystem /opt/homebrew/include -isystem /opt/homebrew/Cellar/openssl@3/3.5.2/include -std=gnu++17 -arch arm64 -Wall -Wextra -O2 -o CMakeFiles/poly-trader-cpp.dir/src/api/api_server.cpp.o -c \"/Users/dani/Desktop/POLY TRADER/cpp-bot/src/api/api_server.cpp\"",
+  "file": "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/api/api_server.cpp",
+  "output": "CMakeFiles/poly-trader-cpp.dir/src/api/api_server.cpp.o"
+},
+{
+  "directory": "/Users/dani/Desktop/POLY TRADER/cpp-bot/build",
+  "command": "/usr/bin/c++ -DBOOST_SYSTEM_DYN_LINK -DBOOST_SYSTEM_NO_LIB -I\"/Users/dani/Desktop/POLY TRADER/cpp-bot/include\" -isystem /opt/homebrew/include/postgresql@14 -isystem /opt/homebrew/include/postgresql@14/server -isystem /opt/homebrew/include -isystem /opt/homebrew/Cellar/openssl@3/3.5.2/include -std=gnu++17 -arch arm64 -Wall -Wextra -O2 -o CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.o -c \"/Users/dani/Desktop/POLY TRADER/cpp-bot/src/database/database.cpp\"",
+  "file": "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/database/database.cpp",
+  "output": "CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.o"
+},
+{
+  "directory": "/Users/dani/Desktop/POLY TRADER/cpp-bot/build",
+  "command": "/usr/bin/c++ -DBOOST_SYSTEM_DYN_LINK -DBOOST_SYSTEM_NO_LIB -I\"/Users/dani/Desktop/POLY TRADER/cpp-bot/include\" -isystem /opt/homebrew/include/postgresql@14 -isystem /opt/homebrew/include/postgresql@14/server -isystem /opt/homebrew/include -isystem /opt/homebrew/Cellar/openssl@3/3.5.2/include -std=gnu++17 -arch arm64 -Wall -Wextra -O2 -o CMakeFiles/poly-trader-cpp.dir/src/database/async_writer.cpp.o -c \"/Users/dani/Desktop/POLY TRADER/cpp-bot/src/database/async_writer.cpp\"",
+  "file": "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/database/async_writer.cpp",
+  "output": "CMakeFiles/poly-trader-cpp.dir/src/database/async_writer.cpp.o"
+},
+{
+  "directory": "/Users/dani/Desktop/POLY TRADER/cpp-bot/build",
+  "command": "/usr/bin/c++ -DBOOST_SYSTEM_DYN_LINK -DBOOST_SYSTEM_NO_LIB -I\"/Users/dani/Desktop/POLY TRADER/cpp-bot/include\" -isystem /opt/homebrew/include/postgresql@14 -isystem /opt/homebrew/include/postgresql@14/server -isystem /opt/homebrew/include -isystem /opt/homebrew/Cellar/openssl@3/3.5.2/include -std=gnu++17 -arch arm64 -Wall -Wextra -O2 -o CMakeFiles/poly-trader-cpp.dir/src/engine/trading_engine.cpp.o -c \"/Users/dani/Desktop/POLY TRADER/cpp-bot/src/engine/trading_engine.cpp\"",
+  "file": "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/engine/trading_engine.cpp",
+  "output": "CMakeFiles/poly-trader-cpp.dir/src/engine/trading_engine.cpp.o"
+},
+{
+  "directory": "/Users/dani/Desktop/POLY TRADER/cpp-bot/build",
+  "command": "/usr/bin/c++ -DBOOST_SYSTEM_DYN_LINK -DBOOST_SYSTEM_NO_LIB -I\"/Users/dani/Desktop/POLY TRADER/cpp-bot/include\" -isystem /opt/homebrew/include/postgresql@14 -isystem /opt/homebrew/include/postgresql@14/server -isystem /opt/homebrew/include -isystem /opt/homebrew/Cellar/openssl@3/3.5.2/include -std=gnu++17 -arch arm64 -Wall -Wextra -O2 -o CMakeFiles/poly-trader-cpp.dir/src/engine/dump_detector.cpp.o -c \"/Users/dani/Desktop/POLY TRADER/cpp-bot/src/engine/dump_detector.cpp\"",
+  "file": "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/engine/dump_detector.cpp",
+  "output": "CMakeFiles/poly-trader-cpp.dir/src/engine/dump_detector.cpp.o"
+},
+{
+  "directory": "/Users/dani/Desktop/POLY TRADER/cpp-bot/build",
+  "command": "/usr/bin/c++ -DBOOST_SYSTEM_DYN_LINK -DBOOST_SYSTEM_NO_LIB -I\"/Users/dani/Desktop/POLY TRADER/cpp-bot/include\" -isystem /opt/homebrew/include/postgresql@14 -isystem /opt/homebrew/include/postgresql@14/server -isystem /opt/homebrew/include -isystem /opt/homebrew/Cellar/openssl@3/3.5.2/include -std=gnu++17 -arch arm64 -Wall -Wextra -O2 -o CMakeFiles/poly-trader-cpp.dir/src/engine/dca_manager.cpp.o -c \"/Users/dani/Desktop/POLY TRADER/cpp-bot/src/engine/dca_manager.cpp\"",
+  "file": "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/engine/dca_manager.cpp",
+  "output": "CMakeFiles/poly-trader-cpp.dir/src/engine/dca_manager.cpp.o"
+},
+{
+  "directory": "/Users/dani/Desktop/POLY TRADER/cpp-bot/build",
+  "command": "/usr/bin/c++ -DBOOST_SYSTEM_DYN_LINK -DBOOST_SYSTEM_NO_LIB -I\"/Users/dani/Desktop/POLY TRADER/cpp-bot/include\" -isystem /opt/homebrew/include/postgresql@14 -isystem /opt/homebrew/include/postgresql@14/server -isystem /opt/homebrew/include -isystem /opt/homebrew/Cellar/openssl@3/3.5.2/include -std=gnu++17 -arch arm64 -Wall -Wextra -O2 -o CMakeFiles/poly-trader-cpp.dir/src/network/polymarket_client.cpp.o -c \"/Users/dani/Desktop/POLY TRADER/cpp-bot/src/network/polymarket_client.cpp\"",
+  "file": "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/network/polymarket_client.cpp",
+  "output": "CMakeFiles/poly-trader-cpp.dir/src/network/polymarket_client.cpp.o"
+},
+{
+  "directory": "/Users/dani/Desktop/POLY TRADER/cpp-bot/build",
+  "command": "/usr/bin/c++ -DBOOST_SYSTEM_DYN_LINK -DBOOST_SYSTEM_NO_LIB -I\"/Users/dani/Desktop/POLY TRADER/cpp-bot/include\" -isystem /opt/homebrew/include/postgresql@14 -isystem /opt/homebrew/include/postgresql@14/server -isystem /opt/homebrew/include -isystem /opt/homebrew/Cellar/openssl@3/3.5.2/include -std=gnu++17 -arch arm64 -Wall -Wextra -O2 -o CMakeFiles/poly-trader-cpp.dir/src/network/websocket_client.cpp.o -c \"/Users/dani/Desktop/POLY TRADER/cpp-bot/src/network/websocket_client.cpp\"",
+  "file": "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/network/websocket_client.cpp",
+  "output": "CMakeFiles/poly-trader-cpp.dir/src/network/websocket_client.cpp.o"
+},
+{
+  "directory": "/Users/dani/Desktop/POLY TRADER/cpp-bot/build",
+  "command": "/usr/bin/c++ -DBOOST_SYSTEM_DYN_LINK -DBOOST_SYSTEM_NO_LIB -I\"/Users/dani/Desktop/POLY TRADER/cpp-bot/include\" -isystem /opt/homebrew/include/postgresql@14 -isystem /opt/homebrew/include/postgresql@14/server -isystem /opt/homebrew/include -isystem /opt/homebrew/Cellar/openssl@3/3.5.2/include -std=gnu++17 -arch arm64 -Wall -Wextra -O2 -o CMakeFiles/poly-trader-cpp.dir/src/network/ws_server.cpp.o -c \"/Users/dani/Desktop/POLY TRADER/cpp-bot/src/network/ws_server.cpp\"",
+  "file": "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/network/ws_server.cpp",
+  "output": "CMakeFiles/poly-trader-cpp.dir/src/network/ws_server.cpp.o"
+},
+{
+  "directory": "/Users/dani/Desktop/POLY TRADER/cpp-bot/build",
+  "command": "/usr/bin/c++ -DBOOST_SYSTEM_DYN_LINK -DBOOST_SYSTEM_NO_LIB -I\"/Users/dani/Desktop/POLY TRADER/cpp-bot/include\" -isystem /opt/homebrew/include/postgresql@14 -isystem /opt/homebrew/include/postgresql@14/server -isystem /opt/homebrew/include -isystem /opt/homebrew/Cellar/openssl@3/3.5.2/include -std=gnu++17 -arch arm64 -Wall -Wextra -O2 -o CMakeFiles/poly-trader-cpp.dir/src/utils/logger.cpp.o -c \"/Users/dani/Desktop/POLY TRADER/cpp-bot/src/utils/logger.cpp\"",
+  "file": "/Users/dani/Desktop/POLY TRADER/cpp-bot/src/utils/logger.cpp",
+  "output": "CMakeFiles/poly-trader-cpp.dir/src/utils/logger.cpp.o"
+}
+]

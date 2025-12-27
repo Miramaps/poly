@@ -19,10 +19,6 @@ set(CMAKE_MAKEFILE_DEPENDS
   "/opt/homebrew/lib/cmake/boost_system-1.88.0/boost_system-config.cmake"
   "/opt/homebrew/lib/cmake/boost_system-1.88.0/libboost_system-variant-shared.cmake"
   "/opt/homebrew/lib/cmake/boost_system-1.88.0/libboost_system-variant-static.cmake"
-  "/opt/homebrew/lib/cmake/boost_thread-1.88.0/boost_thread-config-version.cmake"
-  "/opt/homebrew/lib/cmake/boost_thread-1.88.0/boost_thread-config.cmake"
-  "/opt/homebrew/lib/cmake/boost_thread-1.88.0/libboost_thread-variant-shared.cmake"
-  "/opt/homebrew/lib/cmake/boost_thread-1.88.0/libboost_thread-variant-static.cmake"
   "/opt/homebrew/share/cmake/Modules/CMakeCXXCompiler.cmake.in"
   "/opt/homebrew/share/cmake/Modules/CMakeCXXCompilerABI.cpp"
   "/opt/homebrew/share/cmake/Modules/CMakeCXXInformation.cmake"
@@ -35,7 +31,6 @@ set(CMAKE_MAKEFILE_DEPENDS
   "/opt/homebrew/share/cmake/Modules/CMakeDetermineCompilerSupport.cmake"
   "/opt/homebrew/share/cmake/Modules/CMakeDetermineSystem.cmake"
   "/opt/homebrew/share/cmake/Modules/CMakeFindBinUtils.cmake"
-  "/opt/homebrew/share/cmake/Modules/CMakeFindDependencyMacro.cmake"
   "/opt/homebrew/share/cmake/Modules/CMakeGenericSystem.cmake"
   "/opt/homebrew/share/cmake/Modules/CMakeInitializeConfigs.cmake"
   "/opt/homebrew/share/cmake/Modules/CMakeLanguageInformation.cmake"
@@ -122,9 +117,6 @@ set(CMAKE_MAKEFILE_DEPENDS
   "/opt/homebrew/share/cmake/Modules/Platform/Linker/Apple-AppleClang.cmake"
   "/opt/homebrew/share/cmake/Modules/Platform/UnixPaths.cmake"
   "/opt/homebrew/share/cmake/Modules/SelectLibraryConfigurations.cmake"
-  "/opt/homebrew/share/cmake/nlohmann_json/nlohmann_jsonConfig.cmake"
-  "/opt/homebrew/share/cmake/nlohmann_json/nlohmann_jsonConfigVersion.cmake"
-  "/opt/homebrew/share/cmake/nlohmann_json/nlohmann_jsonTargets.cmake"
   )
 
 # The corresponding makefile is:

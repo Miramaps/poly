@@ -11,6 +11,9 @@
 
 namespace poly {
 
+// Forward declaration
+class PolymarketClient;
+
 struct OrderbookSnapshot {
     std::vector<std::pair<double, double>> bids;  // price, size
     std::vector<std::pair<double, double>> asks;
@@ -27,6 +30,7 @@ struct Trade {
     double price;
     double cost;
     double fee;
+    bool is_live;  // true if this was a real trade, false if paper
     std::chrono::system_clock::time_point timestamp;
 };
 
@@ -43,9 +47,14 @@ struct Config {
     int dump_window_sec = 3;
 };
 
+enum class TradingMode {
+    PAPER,
+    LIVE
+};
+
 struct EngineStatus {
     bool running;
-    std::string mode;
+    std::string mode;  // "PAPER" or "LIVE"
     double cash;
     struct {
         double UP;
@@ -64,6 +73,7 @@ struct EngineStatus {
     Config config;
     int64_t uptime_seconds;
     std::vector<Trade> recent_trades;
+    bool live_trading_available;
 };
 
 class TradingEngine {
@@ -97,6 +107,28 @@ public:
         double shares,
         double price
     );
+    
+    // ============ TRADING MODE CONTROL ============
+    
+    // Set trading mode (PAPER or LIVE)
+    bool set_trading_mode(TradingMode mode);
+    TradingMode get_trading_mode() const;
+    std::string get_trading_mode_string() const;
+    
+    // Check if live trading is available
+    bool is_live_trading_available() const;
+    
+    // Set the Polymarket client for live trading
+    void set_polymarket_client(std::shared_ptr<PolymarketClient> client);
+    
+    // Refresh balance from Polymarket (for live trading)
+    void refresh_balance();
+    
+    // Set cash manually (for paper trading)
+    void set_cash(double amount);
+    
+    // Reset paper trading state
+    void reset_paper_trading();
 
 private:
     Config config_;
@@ -107,7 +139,10 @@ private:
     // Portfolio state
     double cash_ = 1000.0;
     double realized_pnl_ = 0.0;
-    std::string trading_mode_ = "PAPER";
+    TradingMode trading_mode_ = TradingMode::PAPER;
+    
+    // Polymarket client for live trading
+    std::shared_ptr<PolymarketClient> polymarket_client_;
     
     // Market state
     struct MarketState {
@@ -145,7 +180,24 @@ private:
     // Helper functions
     double get_best_bid(const OrderbookSnapshot& book) const;
     double get_best_ask(const OrderbookSnapshot& book) const;
+    
+    // Execute trade via Polymarket API (live mode)
+    std::optional<Trade> execute_live_trade(
+        const std::string& market_slug,
+        const std::string& side,
+        const std::string& token_id,
+        double shares,
+        double price
+    );
+    
+    // Execute paper trade (simulation)
+    std::optional<Trade> execute_paper_trade(
+        const std::string& market_slug,
+        const std::string& side,
+        const std::string& token_id,
+        double shares,
+        double price
+    );
 };
 
 } // namespace poly
-

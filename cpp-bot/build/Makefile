@@ -85,51 +85,6 @@ rebuild_cache:
 rebuild_cache/fast: rebuild_cache
 .PHONY : rebuild_cache/fast
 
-# Special rule for the target list_install_components
-list_install_components:
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Available install components are: \"Unspecified\""
-.PHONY : list_install_components
-
-# Special rule for the target list_install_components
-list_install_components/fast: list_install_components
-.PHONY : list_install_components/fast
-
-# Special rule for the target install
-install: preinstall
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Install the project..."
-	/opt/homebrew/bin/cmake -P cmake_install.cmake
-.PHONY : install
-
-# Special rule for the target install
-install/fast: preinstall/fast
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Install the project..."
-	/opt/homebrew/bin/cmake -P cmake_install.cmake
-.PHONY : install/fast
-
-# Special rule for the target install/local
-install/local: preinstall
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing only the local directory..."
-	/opt/homebrew/bin/cmake -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
-.PHONY : install/local
-
-# Special rule for the target install/local
-install/local/fast: preinstall/fast
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing only the local directory..."
-	/opt/homebrew/bin/cmake -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
-.PHONY : install/local/fast
-
-# Special rule for the target install/strip
-install/strip: preinstall
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing the project stripped..."
-	/opt/homebrew/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
-.PHONY : install/strip
-
-# Special rule for the target install/strip
-install/strip/fast: preinstall/fast
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing the project stripped..."
-	/opt/homebrew/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
-.PHONY : install/strip/fast
-
 # The main all target
 all: cmake_check_build_system
 	$(CMAKE_COMMAND) -E cmake_progress_start "/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" "/Users/dani/Desktop/POLY TRADER/cpp-bot/build//CMakeFiles/progress.marks"
@@ -197,6 +152,30 @@ src/api/api_server.s: src/api/api_server.cpp.s
 src/api/api_server.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/poly-trader-cpp.dir/build.make CMakeFiles/poly-trader-cpp.dir/src/api/api_server.cpp.s
 .PHONY : src/api/api_server.cpp.s
+
+src/database/async_writer.o: src/database/async_writer.cpp.o
+.PHONY : src/database/async_writer.o
+
+# target to build an object file
+src/database/async_writer.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/poly-trader-cpp.dir/build.make CMakeFiles/poly-trader-cpp.dir/src/database/async_writer.cpp.o
+.PHONY : src/database/async_writer.cpp.o
+
+src/database/async_writer.i: src/database/async_writer.cpp.i
+.PHONY : src/database/async_writer.i
+
+# target to preprocess a source file
+src/database/async_writer.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/poly-trader-cpp.dir/build.make CMakeFiles/poly-trader-cpp.dir/src/database/async_writer.cpp.i
+.PHONY : src/database/async_writer.cpp.i
+
+src/database/async_writer.s: src/database/async_writer.cpp.s
+.PHONY : src/database/async_writer.s
+
+# target to generate assembly for a file
+src/database/async_writer.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/poly-trader-cpp.dir/build.make CMakeFiles/poly-trader-cpp.dir/src/database/async_writer.cpp.s
+.PHONY : src/database/async_writer.cpp.s
 
 src/database/database.o: src/database/database.cpp.o
 .PHONY : src/database/database.o
@@ -366,6 +345,30 @@ src/network/websocket_client.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/poly-trader-cpp.dir/build.make CMakeFiles/poly-trader-cpp.dir/src/network/websocket_client.cpp.s
 .PHONY : src/network/websocket_client.cpp.s
 
+src/network/ws_server.o: src/network/ws_server.cpp.o
+.PHONY : src/network/ws_server.o
+
+# target to build an object file
+src/network/ws_server.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/poly-trader-cpp.dir/build.make CMakeFiles/poly-trader-cpp.dir/src/network/ws_server.cpp.o
+.PHONY : src/network/ws_server.cpp.o
+
+src/network/ws_server.i: src/network/ws_server.cpp.i
+.PHONY : src/network/ws_server.i
+
+# target to preprocess a source file
+src/network/ws_server.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/poly-trader-cpp.dir/build.make CMakeFiles/poly-trader-cpp.dir/src/network/ws_server.cpp.i
+.PHONY : src/network/ws_server.cpp.i
+
+src/network/ws_server.s: src/network/ws_server.cpp.s
+.PHONY : src/network/ws_server.s
+
+# target to generate assembly for a file
+src/network/ws_server.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/poly-trader-cpp.dir/build.make CMakeFiles/poly-trader-cpp.dir/src/network/ws_server.cpp.s
+.PHONY : src/network/ws_server.cpp.s
+
 src/utils/logger.o: src/utils/logger.cpp.o
 .PHONY : src/utils/logger.o
 
@@ -397,15 +400,14 @@ help:
 	@echo "... clean"
 	@echo "... depend"
 	@echo "... edit_cache"
-	@echo "... install"
-	@echo "... install/local"
-	@echo "... install/strip"
-	@echo "... list_install_components"
 	@echo "... rebuild_cache"
 	@echo "... poly-trader-cpp"
 	@echo "... src/api/api_server.o"
 	@echo "... src/api/api_server.i"
 	@echo "... src/api/api_server.s"
+	@echo "... src/database/async_writer.o"
+	@echo "... src/database/async_writer.i"
+	@echo "... src/database/async_writer.s"
 	@echo "... src/database/database.o"
 	@echo "... src/database/database.i"
 	@echo "... src/database/database.s"
@@ -427,6 +429,9 @@ help:
 	@echo "... src/network/websocket_client.o"
 	@echo "... src/network/websocket_client.i"
 	@echo "... src/network/websocket_client.s"
+	@echo "... src/network/ws_server.o"
+	@echo "... src/network/ws_server.i"
+	@echo "... src/network/ws_server.s"
 	@echo "... src/utils/logger.o"
 	@echo "... src/utils/logger.i"
 	@echo "... src/utils/logger.s"

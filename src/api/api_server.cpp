@@ -149,7 +149,10 @@ bool check_auth(const std::string& request) {
     return true;
 }
 
-std::string get_status_json() {
+std::string APIServer::get_status_json() {
+    // Get REAL status from engine
+    auto engine_status = engine_.get_status();
+    
     std::lock_guard<std::mutex> lock(g_price_mutex);
     
     auto now = std::chrono::system_clock::now();
@@ -163,15 +166,19 @@ std::string get_status_json() {
         {"data", {
             {"bot", {
                 {"enabled", g_auto_enabled.load()},
-                {"mode", "PAPER"},
-                {"uptime", 0}
+                {"mode", engine_status.mode},  // REAL value from engine
+                {"uptime", engine_status.uptime_seconds},
+                {"liveTradingAvailable", engine_status.live_trading_available}
             }},
             {"portfolio", {
-                {"cash", 1000.0},
-                {"positions", {{"UP", 0}, {"DOWN", 0}}},
-                {"unrealizedPnL", 0.0},
-                {"realizedPnL", 0.0},
-                {"equity", 1000.0}
+                {"cash", engine_status.cash},  // REAL value from engine
+                {"positions", {
+                    {"UP", engine_status.positions.UP}, 
+                    {"DOWN", engine_status.positions.DOWN}
+                }},
+                {"unrealizedPnL", engine_status.unrealized_pnl},
+                {"realizedPnL", engine_status.realized_pnl},
+                {"equity", engine_status.equity}  // REAL value from engine
             }},
             {"currentMarket", {
                 {"slug", g_market_slug},
@@ -190,9 +197,29 @@ std::string get_status_json() {
                     {"bestBid", g_down_price > 0.01 ? g_down_price - 0.01 : 0},
                     {"bestAsk", g_down_price}
                 }}
-            }}
+            }},
+            {"recentTrades", nlohmann::json::array()}
         }}
     };
+    
+    // Add recent trades from engine
+    for (const auto& trade : engine_status.recent_trades) {
+        auto trade_time = std::chrono::system_clock::to_time_t(trade.timestamp);
+        std::stringstream ts;
+        ts << std::put_time(std::gmtime(&trade_time), "%Y-%m-%dT%H:%M:%SZ");
+        
+        status["data"]["recentTrades"].push_back({
+            {"id", trade.id},
+            {"marketSlug", trade.market_slug},
+            {"leg", trade.leg},
+            {"side", trade.side},
+            {"shares", trade.shares},
+            {"price", trade.price},
+            {"cost", trade.cost},
+            {"isLive", trade.is_live},
+            {"timestamp", ts.str()}
+        });
+    }
     
     return status.dump();
 }
@@ -212,38 +239,48 @@ std::string get_logs_json() {
     return response.dump();
 }
 
-std::string process_command(const std::string& cmd) {
+std::string APIServer::process_command(const std::string& cmd) {
     if (cmd == "help") {
         add_log("info", "CMD", "help - showing commands");
         return "=== POLY TRADER C++ COMMANDS ===\n"
-               "help     - Show commands\n"
-               "status   - Bot status\n"
-               "config   - Show config\n"
-               "auto on  - Enable trading\n"
-               "auto off - Disable trading";
+               "help       - Show commands\n"
+               "status     - Bot status\n"
+               "config     - Show config\n"
+               "auto on    - Enable trading\n"
+               "auto off   - Disable trading\n"
+               "mode paper - Switch to paper trading\n"
+               "mode live  - Switch to live trading\n"
+               "balance    - Show current balance\n"
+               "reset      - Reset paper trading state";
     }
     else if (cmd == "status") {
         add_log("info", "CMD", "status - showing bot status");
-        std::lock_guard<std::mutex> lock(g_price_mutex);
+        auto status = engine_.get_status();
         std::ostringstream oss;
         oss << "=== BOT STATUS ===\n"
-            << "Mode: PAPER TRADING\n"
+            << "Mode: " << status.mode << " TRADING\n"
             << "Auto: " << (g_auto_enabled.load() ? "ON" : "OFF") << "\n"
-            << "Market: " << g_market_slug << "\n"
+            << "Live Trading Available: " << (status.live_trading_available ? "YES" : "NO") << "\n"
+            << "Market: " << status.market_slug << "\n"
             << "UP: $" << std::fixed << std::setprecision(2) << g_up_price << "\n"
             << "DOWN: $" << g_down_price << "\n"
-            << "Cash: $1000.00";
+            << "Cash: $" << std::fixed << std::setprecision(2) << status.cash << "\n"
+            << "Equity: $" << std::fixed << std::setprecision(2) << status.equity << "\n"
+            << "Realized P&L: $" << std::fixed << std::setprecision(2) << status.realized_pnl;
         return oss.str();
     }
     else if (cmd == "config") {
         add_log("info", "CMD", "config - showing configuration");
-        return "=== CONFIG ===\n"
-               "Entry Threshold: $0.36\n"
-               "Shares: 10\n"
-               "Sum Target: $0.99\n"
-               "DCA: ON\n"
-               "Breakeven Exit: ON\n"
-               "Trading Window: 120s";
+        auto status = engine_.get_status();
+        std::ostringstream oss;
+        oss << "=== CONFIG ===\n"
+            << "Entry Threshold: $" << status.config.move << "\n"
+            << "Shares: " << status.config.shares << "\n"
+            << "Sum Target: $" << status.config.sum_target << "\n"
+            << "DCA: " << (status.config.dca_enabled ? "ON" : "OFF") << "\n"
+            << "Breakeven Exit: " << (status.config.breakeven_enabled ? "ON" : "OFF") << "\n"
+            << "Trading Window: 120s";
+        return oss.str();
     }
     else if (cmd == "auto on") {
         g_auto_enabled = true;
@@ -254,6 +291,59 @@ std::string process_command(const std::string& cmd) {
         g_auto_enabled = false;
         add_log("info", "CMD", "Auto trading DISABLED");
         return "Auto trading DISABLED";
+    }
+    else if (cmd == "mode paper" || cmd == "paper") {
+        bool success = engine_.set_trading_mode(TradingMode::PAPER);
+        if (success) {
+            add_log("info", "CMD", "Switched to PAPER trading mode");
+            return "✓ Switched to PAPER trading mode\nTrades will be simulated (no real money)";
+        } else {
+            add_log("error", "CMD", "Failed to switch to PAPER mode");
+            return "✗ Failed to switch to PAPER mode";
+        }
+    }
+    else if (cmd == "mode live" || cmd == "live") {
+        bool success = engine_.set_trading_mode(TradingMode::LIVE);
+        if (success) {
+            add_log("warn", "CMD", "⚠️ Switched to LIVE trading mode - REAL MONEY!");
+            return "⚠️ Switched to LIVE trading mode\n"
+                   "WARNING: Trades will use REAL MONEY!\n"
+                   "Balance has been refreshed from Polymarket.";
+        } else {
+            add_log("error", "CMD", "Failed to switch to LIVE mode");
+            return "✗ Failed to switch to LIVE mode\n"
+                   "Make sure POLYMARKET_PRIVATE_KEY is set in your .env file\n"
+                   "And that py-clob-client is installed: pip install py-clob-client";
+        }
+    }
+    else if (cmd == "balance") {
+        auto status = engine_.get_status();
+        std::ostringstream oss;
+        oss << "=== BALANCE ===\n"
+            << "Mode: " << status.mode << "\n"
+            << "Cash: $" << std::fixed << std::setprecision(2) << status.cash << " USDC\n"
+            << "Positions: UP=" << status.positions.UP << " DOWN=" << status.positions.DOWN << "\n"
+            << "Equity: $" << std::fixed << std::setprecision(2) << status.equity;
+        
+        if (status.mode == "LIVE") {
+            engine_.refresh_balance();
+            auto new_status = engine_.get_status();
+            oss << "\n\n(Balance refreshed from Polymarket)\n"
+                << "Updated Cash: $" << std::fixed << std::setprecision(2) << new_status.cash;
+        }
+        
+        add_log("info", "CMD", "balance - showing current balance");
+        return oss.str();
+    }
+    else if (cmd == "reset") {
+        auto status = engine_.get_status();
+        if (status.mode == "LIVE") {
+            add_log("error", "CMD", "Cannot reset in LIVE mode");
+            return "✗ Cannot reset in LIVE mode\nSwitch to PAPER mode first: mode paper";
+        }
+        engine_.reset_paper_trading();
+        add_log("info", "CMD", "Paper trading state reset");
+        return "✓ Paper trading state reset\nCash: $1,000.00\nP&L: $0.00";
     }
     
     add_log("warn", "CMD", "Unknown command: " + cmd);
@@ -348,21 +438,44 @@ void APIServer::run() {
                           get_logs_json();
             }
             else if (base_path == "/api/config") {
+                auto status = engine_.get_status();
                 nlohmann::json cfg = {
                     {"success", true},
                     {"data", {
-                        {"entryThreshold", 0.36},
-                        {"shares", 10},
-                        {"sumTarget", 0.99},
-                        {"dcaEnabled", true},
-                        {"tradingWindowSec", 120}
+                        {"entryThreshold", status.config.move},
+                        {"shares", status.config.shares},
+                        {"sumTarget", status.config.sum_target},
+                        {"dcaEnabled", status.config.dca_enabled},
+                        {"tradingWindowSec", 120},
+                        {"mode", status.mode},
+                        {"liveTradingAvailable", status.live_trading_available}
                     }}
                 };
                 response = "HTTP/1.1 200 OK\r\n" + cors +
                           "Content-Type: application/json\r\n\r\n" + cfg.dump();
             }
             else if (base_path == "/api/trades") {
+                auto status = engine_.get_status();
                 nlohmann::json trades = {{"success", true}, {"data", nlohmann::json::array()}};
+                
+                for (const auto& trade : status.recent_trades) {
+                    auto trade_time = std::chrono::system_clock::to_time_t(trade.timestamp);
+                    std::stringstream ts;
+                    ts << std::put_time(std::gmtime(&trade_time), "%Y-%m-%dT%H:%M:%SZ");
+                    
+                    trades["data"].push_back({
+                        {"id", trade.id},
+                        {"marketSlug", trade.market_slug},
+                        {"leg", trade.leg},
+                        {"side", trade.side},
+                        {"shares", trade.shares},
+                        {"price", trade.price},
+                        {"cost", trade.cost},
+                        {"isLive", trade.is_live},
+                        {"timestamp", ts.str()}
+                    });
+                }
+                
                 response = "HTTP/1.1 200 OK\r\n" + cors +
                           "Content-Type: application/json\r\n\r\n" + trades.dump();
             }
@@ -372,9 +485,15 @@ void APIServer::run() {
                           "Content-Type: application/json\r\n\r\n" + cycles.dump();
             }
             else if (base_path == "/api/wallet") {
+                auto status = engine_.get_status();
                 nlohmann::json wallet = {
                     {"success", true},
-                    {"data", {{"balance", 1000.0}, {"currency", "USDC"}}}
+                    {"data", {
+                        {"balance", status.cash},
+                        {"currency", "USDC"},
+                        {"mode", status.mode},
+                        {"liveTradingAvailable", status.live_trading_available}
+                    }}
                 };
                 response = "HTTP/1.1 200 OK\r\n" + cors +
                           "Content-Type: application/json\r\n\r\n" + wallet.dump();

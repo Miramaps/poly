@@ -22,6 +22,7 @@ using poly::set_market_info;
 namespace {
     std::unique_ptr<poly::APIServer> g_server;
     std::unique_ptr<poly::WebSocketPriceStream> g_ws;
+    std::shared_ptr<poly::PolymarketClient> g_polymarket_client;
     std::atomic<bool> g_running{true};
     
     // Current tokens
@@ -134,16 +135,28 @@ namespace {
                       << " DOWN=$" << s_down_price << std::endl;
         }
     }
+    
+    void print_startup_banner(bool live_available) {
+        std::cout << R"(
+╔═══════════════════════════════════════════════════════════════╗
+║   POLY TRADER C++ - LIVE TRADING READY                        ║
+║   ⚡ Real-time prices via Polymarket WebSocket                ║
+)" << std::endl;
+
+        if (live_available) {
+            std::cout << R"(║   🟢 LIVE TRADING: Available (credentials found)              ║)" << std::endl;
+        } else {
+            std::cout << R"(║   🟡 LIVE TRADING: Not available (set POLYMARKET_PRIVATE_KEY) ║)" << std::endl;
+        }
+        
+        std::cout << R"(║                                                               ║
+║   Commands: mode live, mode paper, status, help               ║
+╚═══════════════════════════════════════════════════════════════╝
+)" << std::endl;
+    }
 }
 
 int main() {
-    std::cout << R"(
-╔═══════════════════════════════════════════════════════════════╗
-║   POLY TRADER C++ - WEBSOCKET REAL-TIME                       ║
-║   ⚡ Instant price updates via Polymarket WebSocket           ║
-╚═══════════════════════════════════════════════════════════════╝
-)" << std::endl;
-
     std::signal(SIGINT, signal_handler);
     std::signal(SIGTERM, signal_handler);
     
@@ -158,8 +171,16 @@ int main() {
         config.dca_enabled = true;
         config.breakeven_enabled = true;
         
+        // Initialize Polymarket client for live trading
+        g_polymarket_client = std::make_shared<poly::PolymarketClient>();
+        
+        // Check if live trading is available
+        bool live_available = g_polymarket_client->is_live_trading_available();
+        
+        print_startup_banner(live_available);
+        
         std::cout << "[CONFIG] Entry Threshold: $" << config.entry_threshold << std::endl;
-        std::cout << "[CONFIG] Mode: WebSocket Real-Time" << std::endl;
+        std::cout << "[CONFIG] Mode: " << (live_available ? "Live Available" : "Paper Only") << std::endl;
         
         const char* db_url_env = std::getenv("DATABASE_URL");
         std::string db_url = db_url_env ? db_url_env :
@@ -171,6 +192,10 @@ int main() {
         }
         
         poly::TradingEngine engine(config);
+        
+        // Set the Polymarket client for live trading
+        engine.set_polymarket_client(g_polymarket_client);
+        
         engine.start();
         std::cout << "[ENGINE] Started" << std::endl;
         
@@ -184,7 +209,15 @@ int main() {
         g_server = std::make_unique<poly::APIServer>(engine, db, 3001);
         g_server->start();
         
-        std::cout << "\n✓ API: http://localhost:3001\n✓ Dashboard: http://localhost:3000\n\n[RUNNING] WebSocket real-time mode - Ctrl+C to stop\n" << std::endl;
+        std::cout << "\n✓ API: http://localhost:3001\n✓ Dashboard: http://localhost:3000\n" << std::endl;
+        
+        if (live_available) {
+            std::cout << "🟢 Live trading is available! Use 'mode live' to enable.\n" << std::endl;
+        } else {
+            std::cout << "📝 Running in PAPER mode. Set POLYMARKET_PRIVATE_KEY for live trading.\n" << std::endl;
+        }
+        
+        std::cout << "[RUNNING] Ctrl+C to stop\n" << std::endl;
         
         std::string current_slug;
         int64_t current_window_ts = 0;
@@ -244,11 +277,16 @@ int main() {
                     int time_left = 900 - secs_into_window;
                     bool in_trading = secs_into_window <= 120;
                     
+                    // Get current trading mode
+                    auto status = engine.get_status();
+                    std::string mode_indicator = status.mode == "LIVE" ? "🔴 LIVE" : "📝 PAPER";
+                    
                     std::ostringstream oss;
                     oss << std::fixed << std::setprecision(2);
                     oss << "UP: $" << up << " | DOWN: $" << down;
                     oss << " | " << (in_trading ? "🔥 TRADING" : "👁️ WATCHING");
                     oss << " | " << time_left << "s";
+                    oss << " | " << mode_indicator;
                     oss << " | WS:" << (g_ws->is_connected() ? "✓" : "✗");
                     poly::add_log("info", "PRICE", oss.str());
                     

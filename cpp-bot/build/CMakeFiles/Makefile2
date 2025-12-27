@@ -85,12 +85,12 @@ clean: CMakeFiles/poly-trader-cpp.dir/clean
 CMakeFiles/poly-trader-cpp.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/poly-trader-cpp.dir/build.make CMakeFiles/poly-trader-cpp.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/poly-trader-cpp.dir/build.make CMakeFiles/poly-trader-cpp.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir="/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" --progress-num=1,2,3,4,5,6,7,8,9,10 "Built target poly-trader-cpp"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir="/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" --progress-num=1,2,3,4,5,6,7,8,9,10,11,12 "Built target poly-trader-cpp"
 .PHONY : CMakeFiles/poly-trader-cpp.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/poly-trader-cpp.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start "/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" 10
+	$(CMAKE_COMMAND) -E cmake_progress_start "/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" 12
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/poly-trader-cpp.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start "/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" 0
 .PHONY : CMakeFiles/poly-trader-cpp.dir/rule
@@ -102,7 +102,7 @@ poly-trader-cpp: CMakeFiles/poly-trader-cpp.dir/rule
 # codegen rule for target.
 CMakeFiles/poly-trader-cpp.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/poly-trader-cpp.dir/build.make CMakeFiles/poly-trader-cpp.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir="/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" --progress-num=1,2,3,4,5,6,7,8,9,10 "Finished codegen for target poly-trader-cpp"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir="/Users/dani/Desktop/POLY TRADER/cpp-bot/build/CMakeFiles" --progress-num=1,2,3,4,5,6,7,8,9,10,11,12 "Finished codegen for target poly-trader-cpp"
 .PHONY : CMakeFiles/poly-trader-cpp.dir/codegen
 
 # clean rule for target.

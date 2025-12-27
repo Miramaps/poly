@@ -1,6 +1,8 @@
 file(REMOVE_RECURSE
   "CMakeFiles/poly-trader-cpp.dir/src/api/api_server.cpp.o"
   "CMakeFiles/poly-trader-cpp.dir/src/api/api_server.cpp.o.d"
+  "CMakeFiles/poly-trader-cpp.dir/src/database/async_writer.cpp.o"
+  "CMakeFiles/poly-trader-cpp.dir/src/database/async_writer.cpp.o.d"
   "CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.o"
   "CMakeFiles/poly-trader-cpp.dir/src/database/database.cpp.o.d"
   "CMakeFiles/poly-trader-cpp.dir/src/engine/dca_manager.cpp.o"
@@ -15,6 +17,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/poly-trader-cpp.dir/src/network/polymarket_client.cpp.o.d"
   "CMakeFiles/poly-trader-cpp.dir/src/network/websocket_client.cpp.o"
   "CMakeFiles/poly-trader-cpp.dir/src/network/websocket_client.cpp.o.d"
+  "CMakeFiles/poly-trader-cpp.dir/src/network/ws_server.cpp.o"
+  "CMakeFiles/poly-trader-cpp.dir/src/network/ws_server.cpp.o.d"
   "CMakeFiles/poly-trader-cpp.dir/src/utils/logger.cpp.o"
   "CMakeFiles/poly-trader-cpp.dir/src/utils/logger.cpp.o.d"
   "poly-trader-cpp"

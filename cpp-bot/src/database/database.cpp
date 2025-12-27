@@ -57,8 +57,28 @@ bool Database::check_connection() {
     return true;
 }
 
+bool Database::ensure_market_exists(const std::string& slug, const std::string& title) {
+    if (!check_connection()) return false;
+    
+    // Use INSERT ... ON CONFLICT DO NOTHING (upsert)
+    std::ostringstream query;
+    query << "INSERT INTO markets (id, slug, question, status, created_at, updated_at) "
+          << "VALUES ("
+          << "'" << slug << "', "  // Use slug as id
+          << "'" << slug << "', "
+          << "'" << (title.empty() ? slug : title) << "', "
+          << "'live', "
+          << "NOW(), NOW()) "
+          << "ON CONFLICT (slug) DO NOTHING";
+    
+    return execute(query.str());
+}
+
 bool Database::insert_trade(const TradeRecord& trade) {
     if (!check_connection()) return false;
+    
+    // Ensure market exists first (for foreign key)
+    ensure_market_exists(trade.market_slug);
     
     std::ostringstream query;
     query << "INSERT INTO trades (id, market_slug, leg, side, token_id, shares, price, cost, fee, cash_after, ts) "
@@ -72,6 +92,7 @@ bool Database::insert_trade(const TradeRecord& trade) {
           << trade.price << ", "
           << trade.cost << ", "
           << trade.fee << ", "
+          << "0, "  // cash_after placeholder
           << "to_timestamp(" << trade.timestamp << "))";
     
     return execute(query.str());

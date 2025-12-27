@@ -452,9 +452,15 @@ int main() {
 
             // Broadcast FULL status to dashboard WebSocket every 100ms (instant feel)
             static auto last_broadcast_time = std::chrono::steady_clock::now();
+            static int broadcast_check_count = 0;
             auto broadcast_now = std::chrono::steady_clock::now();
             if (std::chrono::duration_cast<std::chrono::milliseconds>(broadcast_now - last_broadcast_time).count() >= 100) {
                 last_broadcast_time = broadcast_now;
+                broadcast_check_count++;
+                
+                if (broadcast_check_count <= 3) {
+                    std::cout << "[BROADCAST] Check #" << broadcast_check_count << " - engine_ptr: " << (poly::get_engine_ptr() ? "OK" : "NULL") << std::endl;
+                }
                 
                 if (poly::get_engine_ptr()) {
                     auto status = poly::get_engine_ptr()->get_status();
