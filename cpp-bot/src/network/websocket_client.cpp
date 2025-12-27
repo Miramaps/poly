@@ -226,9 +226,9 @@ void WebSocketPriceStream::read_loop() {
             std::string msg = beast::buffers_to_string(buffer.data());
             msg_count++;
             
-            // DEBUG: Show first 10 messages to see what we're getting
-            if (msg_count <= 10) {
-                std::cout << "[WS MSG #" << msg_count << "] " << msg.substr(0, 150) << "..." << std::endl;
+            // DEBUG: Show first 20 messages to see what we're getting
+            if (msg_count <= 20) {
+                std::cout << "[WS MSG #" << msg_count << "] " << msg.substr(0, 300) << "..." << std::endl;
             }
             
             try {
@@ -293,7 +293,7 @@ void WebSocketPriceStream::read_loop() {
                 // Handle book update messages - FULL ORDERBOOK
                 else if (j.contains("type") && j["type"] == "book" && j.contains("asset_id")) {
                     OrderbookUpdate book_update;
-                    book_update.token_id = j["asset_id"];
+                    book_update.token_id = j["asset_id"].get<std::string>();
                     
                     // Extract ALL asks from book
                     if (j.contains("asks") && j["asks"].is_array()) {
@@ -301,7 +301,7 @@ void WebSocketPriceStream::read_loop() {
                             if (ask.contains("price") && ask.contains("size")) {
                                 double price = std::stod(ask["price"].get<std::string>());
                                 double size = std::stod(ask["size"].get<std::string>());
-                                book_update.asks.push_back({price, size});
+                                book_update.asks.push_back(std::make_pair(price, size));
                             }
                         }
                     }
@@ -312,7 +312,7 @@ void WebSocketPriceStream::read_loop() {
                             if (bid.contains("price") && bid.contains("size")) {
                                 double price = std::stod(bid["price"].get<std::string>());
                                 double size = std::stod(bid["size"].get<std::string>());
-                                book_update.bids.push_back({price, size});
+                                book_update.bids.push_back(std::make_pair(price, size));
                             }
                         }
                     }
