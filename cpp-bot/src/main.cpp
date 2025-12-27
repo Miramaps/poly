@@ -507,7 +507,13 @@ int main() {
                         ws_msg["orderbooks"]["DOWN"]["bids"].push_back(level);
                     }
                     
-                    poly::broadcast_status(ws_msg.dump());
+                    std::string msg_str = ws_msg.dump();
+                    static int broadcast_count = 0;
+                    broadcast_count++;
+                    if (broadcast_count <= 5 || broadcast_count % 100 == 0) {
+                        std::cout << "[BROADCAST #" << broadcast_count << "] Sending " << msg_str.length() << " bytes" << std::endl;
+                    }
+                    poly::broadcast_status(msg_str);
                 }
             }
         }
