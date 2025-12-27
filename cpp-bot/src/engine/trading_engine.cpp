@@ -45,6 +45,27 @@ void TradingEngine::set_market(const std::string& slug, const std::string& up_to
     // Clear all old markets when switching to a new one
     if (active_market_slug_ != slug) {
         markets_.clear();
+        
+        // Abandon any incomplete cycle from previous market
+        if (current_position_) {
+            std::cout << "[ENGINE] ⚠️  Abandoning incomplete cycle from: " << current_position_->market_slug << std::endl;
+            add_log("warn", "ENGINE", "Abandoning incomplete cycle - market window ended");
+            
+            // Record as incomplete cycle
+            last_completed_cycle_.active = false;
+            last_completed_cycle_.status = "incomplete";
+            last_completed_cycle_.leg1_side = current_position_->side;
+            last_completed_cycle_.leg1_price = current_position_->avg_cost;
+            last_completed_cycle_.leg1_shares = current_position_->shares;
+            last_completed_cycle_.total_cost = current_position_->total_cost;
+            last_completed_cycle_.pnl = -(current_position_->total_cost); // Loss = cost of position
+            
+            // Update realized PnL (lost the cost of the position)
+            realized_pnl_ -= current_position_->total_cost;
+            
+            current_position_.reset();
+        }
+        
         std::cout << "[ENGINE] Cleared old markets, switching to: " << slug << std::endl;
     }
     

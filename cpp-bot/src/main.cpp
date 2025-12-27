@@ -276,7 +276,8 @@ int main() {
                 if (up > 0 || down > 0) {
                     int secs_into_window = get_seconds_into_window();
                     int time_left = 900 - secs_into_window;
-                    bool in_trading = secs_into_window <= 120;
+                    // Trading happens in the LAST dump_window_sec seconds
+                    bool in_trading = time_left <= config.dump_window_sec && time_left >= 0;
                     
                     std::ostringstream oss;
                     oss << std::fixed << std::setprecision(2);
@@ -286,9 +287,7 @@ int main() {
                     oss << " | WS:" << (g_ws->is_connected() ? "✓" : "✗");
                     poly::add_log("info", "PRICE", oss.str());
 
-                    
-                    
-                    // Entry signals
+                    // Entry signals - only log during actual trading window
                     if (in_trading) {
                         if (up <= config.entry_threshold) {
                             std::ostringstream sig;
