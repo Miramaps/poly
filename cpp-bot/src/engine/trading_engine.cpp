@@ -560,12 +560,22 @@ std::optional<Trade> TradingEngine::execute_live_trade(
 
 double TradingEngine::get_best_bid(const OrderbookSnapshot& book) const {
     if (book.bids.empty()) return 0.0;
-    return book.bids[0].first;
+    // Best bid is the HIGHEST price in the bids (buyers want highest to fill first)
+    double max_bid = book.bids[0].first;
+    for (const auto& level : book.bids) {
+        if (level.first > max_bid) max_bid = level.first;
+    }
+    return max_bid;
 }
 
 double TradingEngine::get_best_ask(const OrderbookSnapshot& book) const {
     if (book.asks.empty()) return 1.0;
-    return book.asks[0].first;
+    // Best ask is the LOWEST price in the asks (sellers want lowest to fill first)
+    double min_ask = book.asks[0].first;
+    for (const auto& level : book.asks) {
+        if (level.first < min_ask) min_ask = level.first;
+    }
+    return min_ask;
 }
 
 // Config setters
