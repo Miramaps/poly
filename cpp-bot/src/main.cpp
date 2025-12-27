@@ -223,10 +223,16 @@ int main() {
             if (!poly::get_engine_ptr()) return;
             
             book_count++;
-            if (book_count <= 10) {
-                std::string side = (update.token_id == g_up_token) ? "UP" : (update.token_id == g_down_token) ? "DOWN" : "UNKNOWN";
+            std::string side = "UNKNOWN";
+            if (update.token_id == g_up_token) side = "UP";
+            else if (update.token_id == g_down_token) side = "DOWN";
+            
+            if (book_count <= 20) {
                 std::cout << "[BOOK WS] " << side << " orderbook: " << update.asks.size() 
-                          << " asks, " << update.bids.size() << " bids" << std::endl;
+                          << " asks, " << update.bids.size() << " bids"
+                          << " | token: " << update.token_id.substr(0, 12) << "..."
+                          << " | up_token: " << g_up_token.substr(0, 12) << "..."
+                          << " | down_token: " << g_down_token.substr(0, 12) << "..." << std::endl;
             }
             
             poly::OrderbookSnapshot snapshot;
