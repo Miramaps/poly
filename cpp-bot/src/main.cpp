@@ -226,9 +226,16 @@ int main() {
         g_ws = std::make_unique<poly::WebSocketPriceStream>();
         g_ws->set_callback(on_price_update);
         
-        // Set orderbook callback for full depth updates
+        // Set orderbook callback for full depth updates via WebSocket
+        static int book_count = 0;
         g_ws->set_orderbook_callback([](const poly::OrderbookUpdate& update) {
             if (!poly::get_engine_ptr()) return;
+            
+            book_count++;
+            if (book_count <= 5) {
+                std::cout << "[BOOK WS] Received orderbook: " << update.asks.size() 
+                          << " asks, " << update.bids.size() << " bids" << std::endl;
+            }
             
             poly::OrderbookSnapshot snapshot;
             snapshot.asks = update.asks;  // Already in the right format (pairs)
