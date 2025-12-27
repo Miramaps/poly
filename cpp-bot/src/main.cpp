@@ -116,30 +116,38 @@ namespace {
         callback_count++;
         
         bool matched = false;
-        double price = update.price;
+        
+        // Use best_ask as the price (what you pay to buy)
+        double price = update.best_ask > 0 ? update.best_ask : update.price;
+        double bid = update.best_bid > 0 ? update.best_bid : (price - 0.01);
+        double ask = update.best_ask > 0 ? update.best_ask : price;
         
         if (update.token_id == g_up_token) {
-            s_up_price = price;
-            g_up_price.store(price);  // Update atomic for logging loop
+            s_up_price = ask;  // Use ask price (what you pay)
+            g_up_price.store(ask);
             matched = true;
         } else if (update.token_id == g_down_token) {
-            s_down_price = price;
-            g_down_price.store(price);  // Update atomic for logging loop
+            s_down_price = ask;
+            g_down_price.store(ask);
             matched = true;
         }
         
         // Update the API server with latest prices
         set_live_prices(s_up_price, s_down_price);
         
-        // Call trading engine with orderbook update
+        // Call trading engine with REAL orderbook data from WebSocket
         if (poly::get_engine_ptr() && matched) {
             poly::OrderbookSnapshot snapshot;
-            snapshot.asks.push_back({price, 100.0});  // Price with dummy size
-            snapshot.bids.push_back({price - 0.01, 100.0});
+            // Use real bid/ask from WebSocket
+            if (ask > 0) {
+                snapshot.asks.push_back({ask, 100.0});
+            }
+            if (bid > 0) {
+                snapshot.bids.push_back({bid, 100.0});
+            }
             snapshot.timestamp = std::chrono::system_clock::now();
             poly::get_engine_ptr()->on_orderbook_update(update.token_id, snapshot);
         }
-        
     }
 }
 

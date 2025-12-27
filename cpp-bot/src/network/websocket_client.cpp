@@ -174,17 +174,23 @@ void WebSocketPriceStream::send_subscribe(const std::string& token_id) {
     if (!connected_ || !ws_) return;
     
     try {
-        // Subscribe using assets_ids array (Polymarket format)
+        // Subscribe to MARKET channel (price changes, last trade)
         nlohmann::json market_sub = {
             {"type", "subscribe"},
             {"channel", "market"},
             {"assets_ids", {token_id}}
         };
+        ws_->write(net::buffer(market_sub.dump()));
         
-        std::string sub_msg = market_sub.dump();
-        ws_->write(net::buffer(sub_msg));
+        // Subscribe to BOOK channel (real orderbook with bids/asks)
+        nlohmann::json book_sub = {
+            {"type", "subscribe"},
+            {"channel", "book"},
+            {"assets_ids", {token_id}}
+        };
+        ws_->write(net::buffer(book_sub.dump()));
         
-        std::cout << "[WS] Subscribed: " << sub_msg << std::endl;
+        std::cout << "[WS] Subscribed to market+book: " << token_id.substr(0, 20) << "..." << std::endl;
     } catch (const std::exception& e) {
         std::cerr << "[WS] Subscribe error: " << e.what() << std::endl;
     }
