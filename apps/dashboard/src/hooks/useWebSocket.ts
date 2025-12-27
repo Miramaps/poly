@@ -44,6 +44,7 @@ export function useWebSocket() {
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
+            console.log('[WS MSG]', data.type, data.orderbooks?.UP?.asks?.length || 0, 'asks');
             
             // C++ bot sends FULL status via WebSocket (type: "fullStatus")
             if (data.type === 'fullStatus') {
