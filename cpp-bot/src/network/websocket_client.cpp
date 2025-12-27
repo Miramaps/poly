@@ -234,6 +234,11 @@ void WebSocketPriceStream::read_loop() {
             try {
                 auto j = nlohmann::json::parse(msg);
                 
+                // DEBUG: Log unknown message types for first 10 messages
+                if (msg_count <= 10 && !j.contains("price_changes") && !j.contains("event_type") && !j.contains("type")) {
+                    std::cout << "[WS UNKNOWN] " << msg.substr(0, 500) << std::endl;
+                }
+                
                 // Handle price_changes array (main format from Polymarket)
                 if (j.contains("price_changes") && j["price_changes"].is_array()) {
                     for (const auto& change : j["price_changes"]) {
