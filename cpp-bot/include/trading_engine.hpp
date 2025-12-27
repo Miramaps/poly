@@ -41,9 +41,9 @@ struct Config {
     bool dca_enabled = true;
     std::vector<double> dca_levels = {0.30, 0.25, 0.20, 0.15};
     double dca_multiplier = 1.5;
-    double sum_target = 0.99;
+    double sum_target = 1.00;  // Allow break-even hedges (was 0.99 - too tight)
     bool breakeven_enabled = true;
-    double move = 0.36;  // Updated threshold
+    double move = 0.36;  // Entry threshold - buy when price drops below this
     int window_min = 15;
     int dump_window_sec = 120;  // Trade in the last 120 seconds (2 minutes) of each 15-min window
 };

@@ -200,12 +200,46 @@ void TradingEngine::on_orderbook_update(
         // Find which market this token belongs to
         for (auto& [slug, market] : markets_) {
             if (market.up_token_id == token_id) {
-                market.up_orderbook = std::move(snapshot);
+                market.up_orderbook = snapshot;  // Copy, don't move - we need it for derivation
                 market.last_update = std::chrono::system_clock::now();
                 market_to_process = slug;
+                
+                // SORT UP orderbook: Asks ascending (best first), Bids descending (best first)
+                std::sort(market.up_orderbook.asks.begin(), market.up_orderbook.asks.end(),
+                    [](const auto& a, const auto& b) { return a.first < b.first; });
+                std::sort(market.up_orderbook.bids.begin(), market.up_orderbook.bids.end(),
+                    [](const auto& a, const auto& b) { return a.first > b.first; });
+                
+                // DERIVE DOWN orderbook from UP orderbook (binary market: UP + DOWN = 1.0)
+                // UP bids → DOWN asks (inverted price)
+                // UP asks → DOWN bids (inverted price)
+                market.down_orderbook.asks.clear();
+                market.down_orderbook.bids.clear();
+                
+                for (const auto& [price, size] : snapshot.bids) {
+                    double down_ask_price = 1.0 - price;  // UP bid of 0.30 = DOWN ask of 0.70
+                    if (down_ask_price > 0.0 && down_ask_price < 1.0) {
+                        market.down_orderbook.asks.push_back({down_ask_price, size});
+                    }
+                }
+                for (const auto& [price, size] : snapshot.asks) {
+                    double down_bid_price = 1.0 - price;  // UP ask of 0.70 = DOWN bid of 0.30
+                    if (down_bid_price > 0.0 && down_bid_price < 1.0) {
+                        market.down_orderbook.bids.push_back({down_bid_price, size});
+                    }
+                }
+                
+                // SORT: Asks ascending (best/lowest first), Bids descending (best/highest first)
+                std::sort(market.down_orderbook.asks.begin(), market.down_orderbook.asks.end(),
+                    [](const auto& a, const auto& b) { return a.first < b.first; });
+                std::sort(market.down_orderbook.bids.begin(), market.down_orderbook.bids.end(),
+                    [](const auto& a, const auto& b) { return a.first > b.first; });
+                
+                market.down_orderbook.timestamp = snapshot.timestamp;
+                
                 break;
             } else if (market.down_token_id == token_id) {
-                market.down_orderbook = std::move(snapshot);
+                market.down_orderbook = snapshot;  // Direct update if DOWN book comes in
                 market.last_update = std::chrono::system_clock::now();
                 market_to_process = slug;
                 break;
@@ -235,16 +269,17 @@ void TradingEngine::process_market(const std::string& market_slug) {
     int secs_into_window = static_cast<int>(now_sec - market_start_time);
     int time_left = 900 - secs_into_window;
     
-    // Trade in the LAST X seconds of the window (when time_left <= window)
-    // NOT the first X seconds!
-    if (time_left < 0 || time_left > config_.dump_window_sec) {
-        return;  // Not in trading window yet
+    // Trade in the FIRST X seconds of the window (when secs_into_window <= window)
+    if (secs_into_window < 0 || secs_into_window > config_.dump_window_sec) {
+        return;  // Not in trading window (either too early or past the first 120s)
     }
     
-    std::cout << "[ENGINE] 🔥 IN TRADING WINDOW - checking for entry..." << std::endl;
+    // Don't start NEW positions in last 5 seconds of trading window
+    bool can_enter_new = (secs_into_window < config_.dump_window_sec - 5);
+    bool has_position = (current_position_.has_value());
     
-    // Check if we should enter a position
-    if (!current_position_) {
+    // Check if we should enter a position (only if not in last 5 seconds)
+    if (!current_position_ && can_enter_new) {
         // Check cooldown - wait at least 5 seconds between cycles
         auto now_time = std::chrono::system_clock::now();
         auto since_last = std::chrono::duration_cast<std::chrono::seconds>(now_time - last_cycle_complete_time_).count();

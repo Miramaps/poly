@@ -26,15 +26,15 @@ using poly::set_market_info;
 std::atomic<double> g_up_price{0.0};
 std::atomic<double> g_down_price{0.0};
 
+// Thread-safe current token storage
+std::mutex g_token_mutex;
+std::string g_up_token;
+std::string g_down_token;
 
 namespace {
     std::unique_ptr<poly::APIServer> g_server;
     std::unique_ptr<poly::WebSocketPriceStream> g_ws;
     std::atomic<bool> g_running{true};
-    
-    // Current tokens
-    std::string g_up_token;
-    std::string g_down_token;
     std::mutex g_price_mutex;
     
     // CURL handle for market info (only needed occasionally)
@@ -71,13 +71,18 @@ namespace {
     }
     
     // Fetch market info and token IDs (HTTP, only on market switch)
-    bool fetch_market_tokens(const std::string& slug, std::string& question) {
+    // THREAD-SAFE: Uses OUT parameters instead of modifying globals
+    bool fetch_market_tokens(const std::string& slug, std::string& question, 
+                             std::string& up_token_out, std::string& down_token_out) {
         if (!g_curl_market) {
             g_curl_market = curl_easy_init();
             if (!g_curl_market) return false;
             curl_easy_setopt(g_curl_market, CURLOPT_WRITEFUNCTION, write_cb);
-            curl_easy_setopt(g_curl_market, CURLOPT_TIMEOUT, 5L);
+            curl_easy_setopt(g_curl_market, CURLOPT_TIMEOUT, 10L);
             curl_easy_setopt(g_curl_market, CURLOPT_USERAGENT, "PolyTrader/1.0");
+            // Skip SSL verification (for environments with cert issues)
+            curl_easy_setopt(g_curl_market, CURLOPT_SSL_VERIFYPEER, 0L);
+            curl_easy_setopt(g_curl_market, CURLOPT_SSL_VERIFYHOST, 0L);
         }
         
         std::string url = "https://gamma-api.polymarket.com/markets/slug/" + slug;
@@ -86,7 +91,11 @@ namespace {
         curl_easy_setopt(g_curl_market, CURLOPT_URL, url.c_str());
         curl_easy_setopt(g_curl_market, CURLOPT_WRITEDATA, &response);
         
-        if (curl_easy_perform(g_curl_market) != CURLE_OK) return false;
+        CURLcode res = curl_easy_perform(g_curl_market);
+        if (res != CURLE_OK) {
+            std::cerr << "[FETCH] CURL error: " << curl_easy_strerror(res) << std::endl;
+            return false;
+        }
         
         try {
             auto j = nlohmann::json::parse(response);
@@ -96,8 +105,8 @@ namespace {
             if (!tokens_str.empty()) {
                 auto tokens = nlohmann::json::parse(tokens_str);
                 if (tokens.is_array() && tokens.size() >= 2) {
-                    g_up_token = tokens[0].get<std::string>();
-                    g_down_token = tokens[1].get<std::string>();
+                    up_token_out = tokens[0].get<std::string>();
+                    down_token_out = tokens[1].get<std::string>();
                     return true;
                 }
             }
@@ -112,46 +121,42 @@ namespace {
     static double s_down_price = 0.0;
     
     void on_price_update(const poly::PriceUpdate& update) {
-        std::lock_guard<std::mutex> lock(g_price_mutex);
-        callback_count++;
-        
-        bool matched = false;
-        
         // Determine the best available price
-        // Priority: best_ask > price (from price_changes)
         double ask = 0.0;
-        double bid = 0.0;
-        
         if (update.best_ask > 0) {
             ask = update.best_ask;
         } else if (update.price > 0) {
-            ask = update.price;  // Use price as ask
+            ask = update.price;
         }
         
-        if (update.best_bid > 0) {
-            bid = update.best_bid;
-        } else if (ask > 0) {
-            bid = ask - 0.01;  // Estimate bid as ask - spread
+        if (ask <= 0 || ask > 1.0) return;  // Invalid price
+        if (update.token_id.empty()) return;
+        
+        // THREAD-SAFE: Read current tokens with mutex
+        std::string current_up, current_down;
+        {
+            std::lock_guard<std::mutex> token_lock(g_token_mutex);
+            current_up = g_up_token;
+            current_down = g_down_token;
         }
         
-        if (ask <= 0) return;  // No valid price, skip
+        // Skip if tokens not set yet
+        if (current_up.empty() || current_down.empty()) return;
         
-        if (update.token_id == g_up_token) {
+        // STRICT token matching - only accept updates for CURRENT market
+        std::lock_guard<std::mutex> price_lock(g_price_mutex);
+        callback_count++;
+        
+        if (update.token_id == current_up) {
             s_up_price = ask;
             g_up_price.store(ask);
-            matched = true;
-        } else if (update.token_id == g_down_token) {
+            set_live_prices(s_up_price, s_down_price);
+        } else if (update.token_id == current_down) {
             s_down_price = ask;
             g_down_price.store(ask);
-            matched = true;
-        }
-        
-        // Update the API server with latest prices (only when matched)
-        if (matched) {
             set_live_prices(s_up_price, s_down_price);
         }
-        
-        // Don't send orderbook from price updates - we get full orderbook via orderbook callback
+        // Silently ignore updates for OLD market tokens
     }
 }
 
@@ -173,7 +178,7 @@ int main() {
         config.entry_threshold = 0.36;
         config.move = 0.36;
         config.shares = 10;
-        config.sum_target = 0.99;
+        config.sum_target = 1.00;  // Allow break-even hedges
         config.dca_enabled = true;
         config.breakeven_enabled = true;
         
@@ -221,14 +226,25 @@ int main() {
         g_ws->set_callback(on_price_update);
         
         // Set orderbook callback for full depth updates via WebSocket
+        // The trading engine already filters by token ID, so just pass everything through
         g_ws->set_orderbook_callback([](const poly::OrderbookUpdate& update) {
             if (!poly::get_engine_ptr()) return;
+            if (update.token_id.empty()) return;
+            
+            // Debug: log orderbook updates
+            static int orderbook_count = 0;
+            if (++orderbook_count <= 10 || orderbook_count % 50 == 0) {
+                std::cout << "[ORDERBOOK] Token:" << update.token_id.substr(0,12) 
+                          << " Asks:" << update.asks.size() 
+                          << " Bids:" << update.bids.size() << std::endl;
+            }
             
             poly::OrderbookSnapshot snapshot;
-            snapshot.asks = update.asks;  // Already in the right format (pairs)
+            snapshot.asks = update.asks;
             snapshot.bids = update.bids;
             snapshot.timestamp = std::chrono::system_clock::now();
             
+            // Engine's on_orderbook_update already validates token against current market
             poly::get_engine_ptr()->on_orderbook_update(update.token_id, snapshot);
         });
         
@@ -285,6 +301,7 @@ int main() {
             int64_t window_ts = get_current_window_timestamp();
             
             // PRE-FETCH: 20 seconds before window ends, fetch next market tokens
+            // NOTE: We do NOT pre-subscribe to avoid mixing old/new market data
             if (time_left <= 20 && time_left > 0 && !next_tokens_ready) {
                 int64_t next_window_ts = window_ts + 900;
                 next_slug = generate_market_slug(next_window_ts);
@@ -292,26 +309,16 @@ int main() {
                 std::cout << "[PRE-FETCH] Fetching next market: " << next_slug << std::endl;
                 poly::add_log("info", "PRE-FETCH", "Fetching next market: " + next_slug);
                 
-                // Store current tokens
-                std::string old_up = g_up_token;
-                std::string old_down = g_down_token;
-                
-                if (fetch_market_tokens(next_slug, next_question)) {
-                    next_up_token = g_up_token;
-                    next_down_token = g_down_token;
+                // Fetch tokens into separate variables (thread-safe, no race condition)
+                if (fetch_market_tokens(next_slug, next_question, next_up_token, next_down_token)) {
                     next_tokens_ready = true;
-                    
-                    // Restore current tokens
-                    g_up_token = old_up;
-                    g_down_token = old_down;
                     
                     std::cout << "[PRE-FETCH] ✓ Ready: " << next_question << std::endl;
                     poly::add_log("info", "PRE-FETCH", "✓ Next market tokens ready");
+                    std::cout << "[PRE-FETCH] Tokens cached (will subscribe on switch)" << std::endl;
                     
-                    // Pre-subscribe to next market tokens (WebSocket will start receiving)
-                    g_ws->subscribe(next_up_token);
-                    g_ws->subscribe(next_down_token);
-                    std::cout << "[PRE-FETCH] ✓ Pre-subscribed to next market tokens" << std::endl;
+                    // DO NOT pre-subscribe - this caused race condition with mixed market data!
+                    // WebSocket subscription happens at actual market switch time
                 } else {
                     std::cerr << "[PRE-FETCH] Failed to fetch next market" << std::endl;
                 }
@@ -330,52 +337,71 @@ int main() {
                 int64_t window_start_ms = window_ts * 1000;
                 int64_t latency_ms = now_ms - window_start_ms;
                 
+                // CRITICAL: If we're joining a stale market (> 780 seconds = 13 minutes in), 
+                // skip it entirely and wait for next window
+                int secs_into_market = latency_ms / 1000;
+                bool market_too_old = secs_into_market > 780;  // Only 2 min left = too late to trade
+                
                 std::cout << "\n[MARKET] ═══════════════════════════════════════" << std::endl;
                 std::cout << "[MARKET] ⚡ SWITCH DETECTED (latency: " << latency_ms << "ms)" << std::endl;
                 std::cout << "[MARKET] New market: " << current_slug << std::endl;
+                
+                if (market_too_old) {
+                    std::cout << "[MARKET] ⚠️  STALE MARKET - Skipping (joined " << secs_into_market << "s late)" << std::endl;
+                    poly::add_log("warn", "MARKET", "⚠️ STALE - Skipping market joined " + std::to_string(secs_into_market) + "s late");
+                    std::cout << "[MARKET] ═══════════════════════════════════════\n" << std::endl;
+                    continue;  // Skip to next loop iteration, wait for fresh market
+                }
+                
                 poly::add_log("info", "MARKET", "⚡ SWITCH (latency: " + std::to_string(latency_ms) + "ms) " + current_slug);
+                
+                // Clear old subscriptions first
+                g_ws->clear_subscriptions();
+                
+                std::string new_up_token, new_down_token, market_question;
+                bool tokens_acquired = false;
                 
                 // Use pre-fetched tokens if available
                 if (next_tokens_ready && next_slug == current_slug) {
-                    // Clear ALL subscriptions first (removes old market tokens)
-                    g_ws->clear_subscriptions();
-                    
-                    g_up_token = next_up_token;
-                    g_down_token = next_down_token;
-                    
-                    // Re-subscribe to new tokens (forces fresh orderbook request)
-                    g_ws->subscribe(g_up_token);
-                    g_ws->subscribe(g_down_token);
-                    
-                    engine.set_market(current_slug, g_up_token, g_down_token);
-                    poly::set_market_info(current_slug, next_question);
-                    
-                    std::cout << "[MARKET] ✓ Using pre-fetched tokens (INSTANT)" << std::endl;
-                    std::cout << "[TOKENS] UP:   " << g_up_token.substr(0,24) << "..." << std::endl;
-                    std::cout << "[TOKENS] DOWN: " << g_down_token.substr(0,24) << "..." << std::endl;
-                    
+                    new_up_token = next_up_token;
+                    new_down_token = next_down_token;
+                    market_question = next_question;
+                    tokens_acquired = true;
+                    std::cout << "[MARKET] ✓ Using pre-fetched tokens" << std::endl;
                 } else {
-                    // Fallback: fetch tokens now (slower path)
+                    // Fallback: fetch tokens now
                     std::cout << "[MARKET] ⚠️  No pre-fetch, fetching now..." << std::endl;
-                    std::string question;
-                    if (fetch_market_tokens(current_slug, question)) {
-                        engine.set_market(current_slug, g_up_token, g_down_token);
-                        poly::set_market_info(current_slug, question);
-                        
-                        // Subscribe immediately (will send on existing connection)
-                        g_ws->clear_subscriptions();
-                        g_ws->subscribe(g_up_token);
-                        g_ws->subscribe(g_down_token);
-                        
-                        std::cout << "[TOKENS] UP:   " << g_up_token.substr(0,24) << "..." << std::endl;
-                        std::cout << "[TOKENS] DOWN: " << g_down_token.substr(0,24) << "..." << std::endl;
+                    if (fetch_market_tokens(current_slug, market_question, new_up_token, new_down_token)) {
+                        tokens_acquired = true;
                     } else {
                         poly::add_log("error", "MARKET", "Failed to load market");
                         std::cerr << "[MARKET] Failed to load market" << std::endl;
                     }
                 }
                 
-                // Reset prices for new market
+                if (tokens_acquired) {
+                    // THREAD-SAFE token update
+                    {
+                        std::lock_guard<std::mutex> token_lock(g_token_mutex);
+                        g_up_token = new_up_token;
+                        g_down_token = new_down_token;
+                    }
+                    
+                    engine.set_market(current_slug, new_up_token, new_down_token);
+                    poly::set_market_info(current_slug, market_question);
+                    
+                    // Clear old subscriptions and subscribe to new tokens INSTANTLY
+                    // Token validation in on_price_update filters out any stale data
+                    g_ws->clear_subscriptions();
+                    g_ws->subscribe(new_up_token);
+                    g_ws->subscribe(new_down_token);
+                    
+                    std::cout << "[TOKENS] UP:   " << new_up_token.substr(0,24) << "..." << std::endl;
+                    std::cout << "[TOKENS] DOWN: " << new_down_token.substr(0,24) << "..." << std::endl;
+                    std::cout << "[WS] ⚡ Instant subscription switch (no reconnect)" << std::endl;
+                }
+                
+                // Reset prices for new market - MUST be 0 until we get fresh data
                 s_up_price = 0.0;
                 s_down_price = 0.0;
                 g_up_price.store(0.0);
@@ -400,7 +426,8 @@ int main() {
                 double up = g_up_price.load();
                 double down = g_down_price.load();
                 
-                if (up > 0 || down > 0) {
+                // Only log if we have valid prices (both > 0)
+                if (up > 0 && down > 0) {
                     int secs_into_window = get_seconds_into_window();
                     int time_left = 900 - secs_into_window;
                     // Trading happens in the LAST dump_window_sec seconds
@@ -412,6 +439,9 @@ int main() {
                     oss << " | " << (in_trading ? "🔥 TRADING" : "👁️ WATCHING");
                     oss << " | " << time_left << "s";
                     oss << " | WS:" << (g_ws->is_connected() ? "✓" : "✗");
+                    
+                    // OUTPUT TO BOTH TERMINAL AND DASHBOARD
+                    std::cout << "[PRICE] " << oss.str() << std::endl;
                     poly::add_log("info", "PRICE", oss.str());
 
                     // Entry signals - only log during actual trading window

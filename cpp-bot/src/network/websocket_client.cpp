@@ -194,7 +194,7 @@ void WebSocketPriceStream::send_subscribe(const std::string& token_id) {
     if (!connected_ || !ws_) return;
     
     try {
-        // Subscribe to MARKET channel only (book channel doesn't work reliably)
+        // Subscribe to MARKET channel for price updates
         nlohmann::json market_sub = {
             {"type", "subscribe"},
             {"channel", "market"},
@@ -202,7 +202,15 @@ void WebSocketPriceStream::send_subscribe(const std::string& token_id) {
         };
         ws_->write(net::buffer(market_sub.dump()));
         
-        std::cout << "[WS] Subscribed to market: " << token_id.substr(0, 20) << "..." << std::endl;
+        // Subscribe to BOOK channel for orderbook depth
+        nlohmann::json book_sub = {
+            {"type", "subscribe"},
+            {"channel", "book"},
+            {"assets_ids", {token_id}}
+        };
+        ws_->write(net::buffer(book_sub.dump()));
+        
+        std::cout << "[WS] Subscribed market+book: " << token_id.substr(0, 20) << "..." << std::endl;
     } catch (const std::exception& e) {
         std::cerr << "[WS] Subscribe error: " << e.what() << std::endl;
     }
@@ -346,14 +354,9 @@ void WebSocketPriceStream::read_loop() {
                             }
                         }
                         
-                        // Create simple orderbook from best_bid/best_ask
-                        if (!update.token_id.empty() && (best_bid > 0 || best_ask > 0) && orderbook_callback_) {
-                            OrderbookUpdate book_update;
-                            book_update.token_id = update.token_id;
-                            if (best_ask > 0) book_update.asks.push_back({best_ask, 100.0});
-                            if (best_bid > 0) book_update.bids.push_back({best_bid, 100.0});
-                            orderbook_callback_(book_update);
-                        }
+                        // DON'T send orderbook updates from price_changes - 
+                        // they would overwrite full book snapshots from book channel
+                        // Just use price callback for price updates
                         
                         if (!update.token_id.empty() && update.price > 0 && callback_) {
                             callback_(update);
