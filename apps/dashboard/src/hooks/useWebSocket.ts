@@ -13,17 +13,24 @@ export function useWebSocket() {
   const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
   const initialDataLoaded = useRef(false);
 
-  // ONE initial fetch to get base data (portfolio, config, etc)
-  useEffect(() => {
-    if (!initialDataLoaded.current) {
-      getStatus().then(res => {
-        if (res.success && res.data) {
-          setStatus(res.data);
-          initialDataLoaded.current = true;
-        }
-      }).catch(() => {});
+  // Poll status continuously to get currentCycle and other updates
+  const pollStatus = useCallback(async () => {
+    try {
+      const res = await getStatus();
+      if (res.success && res.data) {
+        setStatus(res.data);
+        initialDataLoaded.current = true;
+      }
+    } catch (err) {
+      console.error('[STATUS] Poll failed:', err);
     }
   }, []);
+
+  useEffect(() => {
+    pollStatus(); // Initial fetch
+    const statusInterval = setInterval(pollStatus, 1000); // Poll every second
+    return () => clearInterval(statusInterval);
+  }, [pollStatus]);
 
   // WebSocket for ALL real-time updates
   useEffect(() => {
@@ -41,13 +48,27 @@ export function useWebSocket() {
           try {
             const data = JSON.parse(event.data);
             
-            // C++ bot sends: { type, upPrice, downPrice, market, inTrading, timeLeft, wsConnected }
-            if (data.type === 'status') {
+            // C++ bot sends FULL status via WebSocket (type: "fullStatus")
+            if (data.type === 'fullStatus') {
+              setStatus((prev: any) => ({
+                ...prev,
+                orderbooks: data.orderbooks || prev?.orderbooks,
+                currentMarket: {
+                  ...(prev?.currentMarket || {}),
+                  slug: data.market,
+                  timeLeft: data.timeLeft,
+                  inTradingWindow: data.inTrading,
+                  status: data.inTrading ? 'TRADING' : 'WATCHING'
+                }
+              }));
+            }
+            // Also handle old format for backwards compatibility
+            else if (data.type === 'status') {
               setStatus((prev: any) => ({
                 ...prev,
                 orderbooks: {
-                  UP: { bestAsk: data.upPrice, bestBid: data.upPrice - 0.01 },
-                  DOWN: { bestAsk: data.downPrice, bestBid: data.downPrice - 0.01 }
+                  UP: { asks: [{ price: data.upPrice }], bids: [{ price: data.upPrice - 0.01 }] },
+                  DOWN: { asks: [{ price: data.downPrice }], bids: [{ price: data.downPrice - 0.01 }] }
                 },
                 currentMarket: {
                   ...(prev?.currentMarket || {}),

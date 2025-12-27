@@ -241,6 +241,44 @@ int main() {
         g_ws->start();
         std::cout << "[WS] WebSocket client starting..." << std::endl;
         
+        // Start background orderbook fetcher thread (HTTP, non-blocking)
+        std::atomic<bool> orderbook_running{true};
+        std::thread orderbook_thread([&]() {
+            while (orderbook_running && g_running) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                
+                if (!g_up_token.empty() && !g_down_token.empty() && poly::get_engine_ptr()) {
+                    try {
+                        auto up_book = polymarket_client->get_orderbook(g_up_token);
+                        auto down_book = polymarket_client->get_orderbook(g_down_token);
+                        
+                        poly::OrderbookSnapshot up_snapshot;
+                        for (const auto& ask : up_book.asks) {
+                            up_snapshot.asks.push_back({ask.price, ask.size});
+                        }
+                        for (const auto& bid : up_book.bids) {
+                            up_snapshot.bids.push_back({bid.price, bid.size});
+                        }
+                        up_snapshot.timestamp = std::chrono::system_clock::now();
+                        
+                        poly::OrderbookSnapshot down_snapshot;
+                        for (const auto& ask : down_book.asks) {
+                            down_snapshot.asks.push_back({ask.price, ask.size});
+                        }
+                        for (const auto& bid : down_book.bids) {
+                            down_snapshot.bids.push_back({bid.price, bid.size});
+                        }
+                        down_snapshot.timestamp = std::chrono::system_clock::now();
+                        
+                        poly::get_engine_ptr()->on_orderbook_update(g_up_token, up_snapshot);
+                        poly::get_engine_ptr()->on_orderbook_update(g_down_token, down_snapshot);
+                    } catch (...) {
+                        // Silently ignore errors
+                    }
+                }
+            }
+        });
+        
         // Start API server
         g_server = std::make_unique<poly::APIServer>(engine, db, 3001);
         g_server->start();
@@ -451,34 +489,74 @@ int main() {
                 }
             }
 
-            // Broadcast to dashboard WebSocket every 100ms (instant feel)
+            // Broadcast FULL status to dashboard WebSocket every 100ms (instant feel)
             static auto last_broadcast_time = std::chrono::steady_clock::now();
             auto broadcast_now = std::chrono::steady_clock::now();
             if (std::chrono::duration_cast<std::chrono::milliseconds>(broadcast_now - last_broadcast_time).count() >= 100) {
                 last_broadcast_time = broadcast_now;
-                {
-                    // Build WebSocket message in format dashboard expects
-                    double up_p = g_up_price.load();
-                    double down_p = g_down_price.load();
-                    int ws_secs = get_seconds_into_window();
-                    int ws_time_left = 900 - ws_secs;
-                    bool ws_in_trading = ws_secs <= 120;
+                
+                if (poly::get_engine_ptr()) {
+                    auto status = poly::get_engine_ptr()->get_status();
                     
                     nlohmann::json ws_msg;
-                    ws_msg["type"] = "status";
-                    ws_msg["upPrice"] = up_p;
-                    ws_msg["downPrice"] = down_p;
+                    ws_msg["type"] = "fullStatus";
+                    
+                    // Market info
                     ws_msg["market"] = current_slug;
+                    int ws_secs = get_seconds_into_window();
+                    int ws_time_left = 900 - ws_secs;
+                    bool ws_in_trading = time_left <= config.dump_window_sec && time_left >= 0;
                     ws_msg["inTrading"] = ws_in_trading;
                     ws_msg["timeLeft"] = ws_time_left;
                     ws_msg["wsConnected"] = g_ws && g_ws->is_connected();
-                    ws_msg["autoEnabled"] = true;
+                    
+                    // FULL orderbook data
+                    ws_msg["orderbooks"] = nlohmann::json::object();
+                    ws_msg["orderbooks"]["UP"] = {
+                        {"asks", nlohmann::json::array()},
+                        {"bids", nlohmann::json::array()}
+                    };
+                    ws_msg["orderbooks"]["DOWN"] = {
+                        {"asks", nlohmann::json::array()},
+                        {"bids", nlohmann::json::array()}
+                    };
+                    
+                    for (const auto& [price, size] : status.up_orderbook.asks) {
+                        nlohmann::json level;
+                        level["price"] = price;
+                        level["size"] = size;
+                        ws_msg["orderbooks"]["UP"]["asks"].push_back(level);
+                    }
+                    for (const auto& [price, size] : status.up_orderbook.bids) {
+                        nlohmann::json level;
+                        level["price"] = price;
+                        level["size"] = size;
+                        ws_msg["orderbooks"]["UP"]["bids"].push_back(level);
+                    }
+                    for (const auto& [price, size] : status.down_orderbook.asks) {
+                        nlohmann::json level;
+                        level["price"] = price;
+                        level["size"] = size;
+                        ws_msg["orderbooks"]["DOWN"]["asks"].push_back(level);
+                    }
+                    for (const auto& [price, size] : status.down_orderbook.bids) {
+                        nlohmann::json level;
+                        level["price"] = price;
+                        level["size"] = size;
+                        ws_msg["orderbooks"]["DOWN"]["bids"].push_back(level);
+                    }
+                    
                     poly::broadcast_status(ws_msg.dump());
                 }
             }
         }
         
         // Cleanup
+        orderbook_running = false;
+        if (orderbook_thread.joinable()) {
+            orderbook_thread.join();
+        }
+        
         if (g_curl_market) curl_easy_cleanup(g_curl_market);
         curl_global_cleanup();
         
