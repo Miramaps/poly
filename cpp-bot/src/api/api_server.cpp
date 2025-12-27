@@ -257,7 +257,7 @@ std::string get_status_json() {
         uptime = engine_status.uptime_seconds;
     }
     
-    // Build orderbooks with proper format for frontend
+    // Build orderbooks from REAL engine data
     nlohmann::json orderbooks = {
         {"UP", {
             {"bids", nlohmann::json::array()},
@@ -269,19 +269,27 @@ std::string get_status_json() {
         }}
     };
     
-    // Add UP prices
-    if (g_up_price > 0) {
-        orderbooks["UP"]["asks"].push_back({{"price", g_up_price}});
-        if (g_up_price > 0.01) {
-            orderbooks["UP"]["bids"].push_back({{"price", g_up_price - 0.01}});
-        }
-    }
-    
-    // Add DOWN prices
-    if (g_down_price > 0) {
-        orderbooks["DOWN"]["asks"].push_back({{"price", g_down_price}});
-        if (g_down_price > 0.01) {
-            orderbooks["DOWN"]["bids"].push_back({{"price", g_down_price - 0.01}});
+    // Use REAL orderbook from engine
+    {
+        std::lock_guard<std::mutex> lock(engine_mutex);
+        if (engine_) {
+            auto status = engine_->get_status();
+            
+            // UP orderbook
+            for (const auto& [price, size] : status.up_orderbook.asks) {
+                orderbooks["UP"]["asks"].push_back({{"price", price}, {"size", size}});
+            }
+            for (const auto& [price, size] : status.up_orderbook.bids) {
+                orderbooks["UP"]["bids"].push_back({{"price", price}, {"size", size}});
+            }
+            
+            // DOWN orderbook
+            for (const auto& [price, size] : status.down_orderbook.asks) {
+                orderbooks["DOWN"]["asks"].push_back({{"price", price}, {"size", size}});
+            }
+            for (const auto& [price, size] : status.down_orderbook.bids) {
+                orderbooks["DOWN"]["bids"].push_back({{"price", price}, {"size", size}});
+            }
         }
     }
     
@@ -482,6 +490,17 @@ std::string process_command(const std::string& cmd) {
             g_engine_ptr->set_trading_mode(poly::TradingMode::PAPER);
             add_log("info", "MODE", "📝 Paper trading mode");
             return "📝 Paper trading enabled - Simulated trades only";
+        }
+        return "❌ Engine not available";
+    }
+    // RESET COMMAND
+    else if (cmd == "reset") {
+        if (g_engine_ptr) {
+            g_auto_enabled = false;
+            g_engine_ptr->stop();
+            g_engine_ptr->reset_paper_trading();
+            add_log("info", "CMD", "🔄 Portfolio reset to $1000");
+            return "🔄 Portfolio reset!\n• Cash: $1,000.00\n• Positions: 0\n• P&L: $0.00\n• Trade history cleared\n• Bot is now OFF - use 'auto on' to start trading";
         }
         return "❌ Engine not available";
     }
