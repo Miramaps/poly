@@ -226,13 +226,43 @@ void WebSocketPriceStream::read_loop() {
             try {
                 auto j = nlohmann::json::parse(msg);
                 
-                // DEBUG: Log unknown message types for first 10 messages
-                if (msg_count <= 10 && !j.contains("price_changes") && !j.contains("event_type") && !j.contains("type")) {
-                    std::cout << "[WS UNKNOWN] " << msg.substr(0, 500) << std::endl;
+                // PRIORITY 1: Full orderbook snapshots (has bids/asks arrays + asset_id)
+                if (j.contains("asset_id") && (j.contains("bids") || j.contains("asks")) && !j.contains("price_changes")) {
+                    // Full orderbook snapshot from WebSocket
+                    OrderbookUpdate book_update;
+                    book_update.token_id = j["asset_id"].get<std::string>();
+                    
+                    // Extract ALL asks from book
+                    if (j.contains("asks") && j["asks"].is_array()) {
+                        for (const auto& ask : j["asks"]) {
+                            if (ask.contains("price") && ask.contains("size")) {
+                                double price = std::stod(ask["price"].get<std::string>());
+                                double size = std::stod(ask["size"].get<std::string>());
+                                book_update.asks.push_back(std::make_pair(price, size));
+                            }
+                        }
+                    }
+                    
+                    // Extract ALL bids from book
+                    if (j.contains("bids") && j["bids"].is_array()) {
+                        for (const auto& bid : j["bids"]) {
+                            if (bid.contains("price") && bid.contains("size")) {
+                                double price = std::stod(bid["price"].get<std::string>());
+                                double size = std::stod(bid["size"].get<std::string>());
+                                book_update.bids.push_back(std::make_pair(price, size));
+                            }
+                        }
+                    }
+                    
+                    // Send to orderbook callback (FULL depth)
+                    if (!book_update.asks.empty() || !book_update.bids.empty()) {
+                        if (orderbook_callback_) {
+                            orderbook_callback_(book_update);
+                        }
+                    }
                 }
-                
-                // Handle price_changes array (main format from Polymarket)
-                if (j.contains("price_changes") && j["price_changes"].is_array()) {
+                // PRIORITY 2: Handle price_changes array (trades, price updates)
+                else if (j.contains("price_changes") && j["price_changes"].is_array()) {
                     for (const auto& change : j["price_changes"]) {
                         PriceUpdate update;
                         update.token_id = change.value("asset_id", "");
@@ -287,8 +317,9 @@ void WebSocketPriceStream::read_loop() {
                         }
                     }
                 }
-                // Handle book update messages - FULL ORDERBOOK
-                else if (j.contains("type") && j["type"] == "book" && j.contains("asset_id")) {
+                // Handle book snapshots (has asset_id + bids/asks arrays)
+                else if (j.contains("asset_id") && (j.contains("bids") || j.contains("asks"))) {
+                    // Full orderbook snapshot from WebSocket
                     OrderbookUpdate book_update;
                     book_update.token_id = j["asset_id"].get<std::string>();
                     
@@ -314,6 +345,7 @@ void WebSocketPriceStream::read_loop() {
                         }
                     }
                     
+                    // Send to orderbook callback (FULL depth)
                     if (!book_update.asks.empty() || !book_update.bids.empty()) {
                         if (orderbook_callback_) {
                             orderbook_callback_(book_update);
